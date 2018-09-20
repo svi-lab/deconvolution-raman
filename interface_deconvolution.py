@@ -67,6 +67,11 @@ def new_interface(new_file):
         
         """
         Load a raw text file with Raman spectroscopy measurements.
+        
+        Parameters
+        ----------
+        filename : str
+            file to be loaded
         """
             
         xtot  = np.genfromtxt(filename, delimiter = delimiter, usecols = 0, skip_header = 1)
