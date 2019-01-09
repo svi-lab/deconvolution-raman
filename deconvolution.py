@@ -93,11 +93,11 @@ color_map = [(0.69803922, 0.09411765, 0.16862745),
 #                    reverse=True).mpl_colormap
 blue_red = mpl.cm.seismic
 params = {'backend': 'pdf', 'axes.labelsize': font_size,
-          'text.fontsize': font_size, 'legend.fontsize': font_size,
+          'font.size': font_size, 'legend.fontsize': font_size,
           'xtick.labelsize': font_size, 'ytick.labelsize': font_size,
           'text.usetex': False, 'figure.figsize': fig_size,
           'font.family': 'serif', 'font.serif': 'times',
-          'axes.color_cycle': color_set, 'legend.frameon': False,
+          'axes.prop_cycle': mpl.cycler(color=color_set), 'legend.frameon': False,
           'legend.loc': 'best'}
 mpl.rcParams.update(params)
 
