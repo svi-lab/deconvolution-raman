@@ -145,27 +145,37 @@ class wdfReader(object):
     
     
     def get_map_area(self):
+        '''
+        Outputs: 
+            mapa: contains three values for the origin coordinates, then three values for the step sizes dx, dy, dz
+            nx,ny,nz: number of steps in each direction
+            map_type: you should be able to retreive this info, but not sure if this is the one'''
         pos, size = self.locate_block('WMAP')
         map_type = self._read_int32()
-        offset = 8
+        offset = 12
         self.file_obj.seek(pos + offset)
         
         mapa = numpy.round(numpy.fromfile(self.file_obj, dtype="float32", count=6),2) # first three are the origin coordinates, the next three are stepsizes (?)
 #        ox = self._read_float()
 #        oy = self._read_float()
 #        oz = self._read_float()
-#        dx = self._read_float()
-#        dy = self._read_float()
-#        dz = self._read_float()
-        rx = self._read_int32()
-        ry = self._read_int32()
-        rz = self._read_int32()
+        dx = self._read_float()
+        dy = self._read_float()
+        dz = self._read_float()
+        nx = self._read_int32()
+        ny = self._read_int32()
+        nz = self._read_int32()
         linefocus_size = self._read_int32()
-        return (map_type, mapa, rx, ry, rz, linefocus_size) #ox, oy, oz, dx, dy, dz
+        return (map_type, mapa, nx, ny, nz) #ox, oy, oz, dx, dy, dz
     
     
     def get_ctime(self):
-        pos, size = self.locate_block("CreationTime")
+        '''This is the effort to retreive the datetime stamp of the measurement's beggining,
+        but it doesn't really work yet'''
+        pos, size = self.locate_block("WXDM")
+        offset = 8
+        self.file_obj.seek(pos + offset)
+
         t1 = self._read_int32()
         t2 = self._read_int32()
         t3 = self._read_int32()
@@ -174,6 +184,8 @@ class wdfReader(object):
         t6 = self._read_int32()        
         return (t1,t2,t3,t4,t5,t6)    
     def get_etime(self):
+        '''This is the effort to retreive the datetime stamp of the measurement's end,
+        but it doesn't really work yet'''
         pos, size = self.locate_block("ETA")
         et1 = self._read_int32()
         et2 = self._read_int32()
@@ -211,6 +223,9 @@ class wdfReader(object):
     Important parts for data retrieval
     """
     def get_xdata(self):
+        '''These are the values on the x-axis for each spectra.
+        It's usually the Raman shift, but could be something else depending on the measurement settings.
+        There should be a way to retreive the information about the units here'''
         pos = self.locate_block("XLST")[0]
         offset = 24
         self.file_obj.seek(pos + offset)
@@ -229,6 +244,8 @@ class wdfReader(object):
         return y_data
 
     def get_spectra(self, start=0, end=-1):
+        '''These are your spectra. Again, the information about the units is missing.
+        There should be a way to get this info as well'''
         if end == -1:           # take all spectra
             end = self.count-1
         if (start not in range(self.count)) or (end not in range(self.count)):
