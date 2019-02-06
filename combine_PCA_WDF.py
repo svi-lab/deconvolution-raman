@@ -10,6 +10,24 @@ from copy import copy
 from timeit import default_timer as time
 #from tkinter import filedialog, Tk, messagebox
 
+'''Ideas to improve the script:
+    Add the possiblity to plot the heatmap of the max_height of one selected peak (region) or it's area
+    
+    I should test Katia's idea, which is to do the deconvolultion on several subensembles of spectra,
+    then on the whole spectra and then compare if the add up.
+    
+    Check out the issue of (non)normalized mixture coefficients.
+    Would it be more meaningfull to renormalize the components (divide by max value, for exemple),
+    so the mixture coefficients should add up to 1.
+    (how would the division by max value reflect to mixture coeffs? - should they be then multiplied by the same value?)
+    Now, each component has very different absolute values, 
+    so even if the mixture coeff is small, the first component is nevertheless predominant
+    in the decomosed spectra by the sheer fact that it's intensity is several orders of magnitude greater
+    than that of some other components
+    
+    
+'''
+
 #filename = 'Data/Test-Na-SiO2 0079 -532nm-obj100-p100-10s over night carto.wdf'#scan_type 1, measurement_type 3
 #filename = 'Data/Test-Na-SiO2 0079 droplet on quartz -532nm-obj50-p50-15s over night_Copy_Copy.wdf'#scan_type 2, measurement_type 2
 #filename = 'Data/Test quartz substrate -532nm-obj100-p100-10s.wdf'#scan_type 2, measurement_type 1
