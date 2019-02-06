@@ -103,7 +103,7 @@ class wdfReader(object):
         for i in range(4):
             self.application_version[i] = self._read_int16()
         # TODO: change the types to string
-        self.scan_type = self._read_int32() # it gave 7 for one map scan, 2 for another
+        self.scan_type = self._read_int32() # it gave 7 for one map scan, 2 for another and 1 for yet another (so this isn't really reliable for determining the scan type)
         self.measurement_type = self._read_int32() # it gives 3 map scan
         # For the units
         # TODO: change to string
@@ -134,9 +134,10 @@ class wdfReader(object):
                 size = self._read_int64()
                 next_pos += size
                 self.file_obj.seek(next_pos)
-                print(curr_name, curr_pos, uid, size)
+                
             # found the id
             if curr_name == block_name:
+                print(curr_name, curr_pos, uid, size)
                 return (curr_pos, size)
             else:
                 raise ValueError("The block with name {} is not found!".format(block_name))   
@@ -150,23 +151,26 @@ class wdfReader(object):
             mapa: contains three values for the origin coordinates, then three values for the step sizes dx, dy, dz
             nx,ny,nz: number of steps in each direction
             map_type: you should be able to retreive this info, but not sure if this is the one'''
-        pos, size = self.locate_block('WMAP')
-        map_type = self._read_int32()
-        offset = 12
-        self.file_obj.seek(pos + offset)
-        
-        mapa = numpy.round(numpy.fromfile(self.file_obj, dtype="float32", count=6),2) # first three are the origin coordinates, the next three are stepsizes (?)
-#        ox = self._read_float()
-#        oy = self._read_float()
-#        oz = self._read_float()
-        dx = self._read_float()
-        dy = self._read_float()
-        dz = self._read_float()
-        nx = self._read_int32()
-        ny = self._read_int32()
-        nz = self._read_int32()
-        linefocus_size = self._read_int32()
-        return (map_type, mapa, nx, ny, nz) #ox, oy, oz, dx, dy, dz
+        try:
+            pos, size = self.locate_block('WMAP')
+            map_type = self._read_int32()
+            offset = 12
+            self.file_obj.seek(pos + offset)
+            
+            mapa = numpy.round(numpy.fromfile(self.file_obj, dtype="float32", count=6),2) # first three are the origin coordinates, the next three are stepsizes (?)
+    #        ox = self._read_float()
+    #        oy = self._read_float()
+    #        oz = self._read_float()
+            dx = self._read_float()
+            dy = self._read_float()
+            dz = self._read_float()
+            nx = self._read_int32()
+            ny = self._read_int32()
+            nz = self._read_int32()
+            linefocus_size = self._read_int32()
+            return (map_type, mapa, nx, ny, nz) #ox, oy, oz, dx, dy, dz
+        except:
+            print('Failed to locate the "WMAP" block, so this is probably not a map scan')
     
     
     def get_ctime(self):
