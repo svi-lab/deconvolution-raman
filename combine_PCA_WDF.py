@@ -111,7 +111,7 @@ print(f'nmf done is {end-start:.3f}s')
 #%%
 comp_max = np.empty(n_components)
 for z in range(n_components):
-    comp_max[z] = np.max(components[z])
+    comp_max[z] = integrate.trapz(components[z])
     components[z] /= comp_max[z]
     mix[:,z] *= comp_max[np.newaxis,z]
 reconstructed_spectra = np.dot(mix, components)
