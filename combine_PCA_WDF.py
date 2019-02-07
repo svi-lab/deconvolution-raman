@@ -43,9 +43,9 @@ it will pop-up another plot with the spectra recorded at this point, together wi
 #filename = 'Data/Test-Na-SiO2 0079 droplet on quartz -532nm-obj50-p50-15s over night_Copy_Copy.wdf'#scan_type 2, measurement_type 2
 #filename = 'Data/Test quartz substrate -532nm-obj100-p100-10s.wdf'#scan_type 2, measurement_type 1
 #filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'#scan_type 2 (wtf?), measurement_type 3
-#filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
+filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
 #filename = 'Data/M1ANMap_Depth_2mm_.wdf'
-filename = 'Data/M1SCMap_depth_.wdf'
+#filename = 'Data/M1SCMap_depth_.wdf'
 snake = True # The scanning mode: either always from left to right (snake = False), either left->right right->left (snake = True)
 n_components=5
 # one should always check if the spectra were recorded with the dead pixels included or not
@@ -98,6 +98,7 @@ print(f'pca treatement done in {end-start:.3f}s')
 start = time()
 
 cleaned_spectra = deconvolution.clean(sigma3, denoised_spectra, mode='area')
+cleaned_spectra /= np.max(cleaned_spectra, axis=1)[:,np.newaxis]
 end = time()
 print(f'done cleaning in {end - start:.3f}s')
 start = time()
@@ -107,6 +108,11 @@ components, mix, nmf_reconstruction_error = deconvolution.nmf_step(cleaned_spect
 end = time()
 print(f'nmf done is {end-start:.3f}s')
 #%%
+comp_max = np.empty(n_components)
+for z in range(n_components):
+    comp_max[z] = np.max(components[z])
+    components[z] /= comp_max[z]
+    mix[:,z] *= comp_max[np.newaxis,z]
 novi_mix = mix.reshape(n_y,n_x,n_components)
 #%%
 fi, ax = plt.subplots(int(np.ceil(np.sqrt(n_components))), int(np.ceil(np.sqrt(n_components/2))))
