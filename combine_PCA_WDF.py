@@ -137,8 +137,7 @@ def onclick(event):
         line_px = n_y
 
         broj = int(y_pos * line_px + x_pos)
-#        print(f'line_px={line_px}, current_pos={current_pos}')
-#        print(f'you clicked on line {y_pos} on {iii}th canvas')
+
         if event.dblclick:
             ff,aa = plt.subplots()
             aa.plot(sigma3, cleaned_spectra[broj])
