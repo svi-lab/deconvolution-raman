@@ -135,12 +135,8 @@ def onclick(event):
         y_pos = int(np.floor(event.ydata))
 
         line_px = n_y
-        if False:#snake == True and y_pos%2 == 1: #this is to account for the impair lines, whose position should be counted backwards
-            current_pos = line_px - x_pos
-            print(f'impair line')
-        else:
-            current_pos = x_pos
-        broj = int(y_pos * line_px + current_pos)
+
+        broj = int(y_pos * line_px + x_pos)
 #        print(f'line_px={line_px}, current_pos={current_pos}')
 #        print(f'you clicked on line {y_pos} on {iii}th canvas')
         if event.dblclick:
