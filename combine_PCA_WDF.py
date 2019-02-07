@@ -9,6 +9,17 @@ import seaborn as sns; sns.set()
 from copy import copy
 from timeit import default_timer as time
 #from tkinter import filedialog, Tk, messagebox
+'''This script uses Williams' script of deconvolution together with wdfReader to produce some informative graphical output.
+ATTENTION: For the momoent, the scripts works onlyy on  map scans (.wdf files)
+All of the abovementioned scripts should be in your working directory (maybe you need to add the __init__.py file in the same folder ass well.
+You should first choose the data file with the map scan in the .wdf format (I could add later the input dialog)
+You set the "snake" variable to "True" or "False" (depending on the way the map was recorded)
+You choose the number of components. 
+That's it
+You should first get the plot of all the components found,
+Then the heatmap of the mixing coefficients: when you double-click on a pixel on this map, 
+it will pop-up another plot with the spectra recorded at this point, together with the contributions of each component
+'''
 
 '''Ideas to improve the script:
     Add the possiblity to plot the heatmap of the max_height of one selected peak (region) or it's area
