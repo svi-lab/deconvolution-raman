@@ -10,8 +10,8 @@ from copy import copy
 from timeit import default_timer as time
 #from tkinter import filedialog, Tk, messagebox
 '''This script uses Williams' script of deconvolution together with wdfReader to produce some informative graphical output.
-ATTENTION: For the momoent, the scripts works onlyy on  map scans (.wdf files)
-All of the abovementioned scripts should be in your working directory (maybe you need to add the __init__.py file in the same folder ass well.
+ATTENTION: For the momoent, the scripts works only on  map scans (.wdf files)
+All of the abovementioned scripts should be in your working directory (maybe you need to add the __init__.py file in the same folder as well.
 You should first choose the data file with the map scan in the .wdf format (I could add later the input dialog)
 You set the "snake" variable to "True" or "False" (depending on the way the map was recorded)
 You choose the number of components. 
@@ -44,12 +44,17 @@ it will pop-up another plot with the spectra recorded at this point, together wi
 #filename = 'Data/Test quartz substrate -532nm-obj100-p100-10s.wdf'#scan_type 2, measurement_type 1
 #filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'#scan_type 2 (wtf?), measurement_type 3
 #filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
-filename = 'Data/M1ANMap_Depth_2mm_.wdf'
-#filename = 'Data/M1SCMap_depth_.wdf'
+#filename = 'Data/M1ANMap_Depth_2mm_.wdf'
+filename = 'Data/M1SCMap_depth_.wdf'
 snake = True # The scanning mode: either always from left to right (snake = False), either left->right right->left (snake = True)
-
-
-
+n_components=5
+# one should always check if the spectra were recorded with the dead pixels included or not
+# It turns out that firs 10 and the last 16 pixels on the Renishaw SVI spectrometer detector are reserved, 
+# and no signal is recorded on those pixels by the detector. So we should either enter these parameters inside the Wire settings
+# or if it's not done, remove those pixels here manually
+# Furthermore, we sometimes want to perform the deconvolution only on a part of the spectra, so here you define the part that interests you
+ssss = slice(575,950)
+spectra_slice = np.index_exp[:,ssss]
 kiko = wdfReader.wdfReader(filename)
 
 spektar = kiko.get_spectra()
@@ -69,8 +74,8 @@ if snake == True:
 else:
     spektar2 = spektar
 # Removing the outliers (as they were noticed in one of the scans, probably the firs file from those above)
-spektar3 = copy(spektar2[:,575:950])#[:,10:-10])
-sigma3 = copy(sigma2[575:950])#[10:-10])
+spektar3 = copy(spektar2[spectra_slice])#[:,10:-10])
+sigma3 = copy(sigma2[ssss])#[10:-10])
 
 if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
     # this is to remove the two lines with scanning problems:
@@ -78,7 +83,7 @@ if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
 #%%
 start = time()
 
-n_components=5
+
 if False:#spektar3.shape[0] < spektar3.shape[1]:
     n_components, denoised_spectra = deconvolution.pca_step(spektar3)
 else:
