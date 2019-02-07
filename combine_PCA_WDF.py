@@ -3,6 +3,7 @@ import wdfReader
 import deconvolution
 import matplotlib.pyplot as plt
 from sklearn import decomposition
+from scipy import integrate
 import h5py
 import numpy as np
 import seaborn as sns; sns.set()
@@ -98,12 +99,12 @@ print(f'pca treatement done in {end-start:.3f}s')
 start = time()
 
 cleaned_spectra = deconvolution.clean(sigma3, denoised_spectra, mode='area')
-cleaned_spectra /= np.max(cleaned_spectra, axis=1)[:,np.newaxis]
+#cleaned_spectra /= np.max(cleaned_spectra, axis=1)[:,np.newaxis]
 end = time()
 print(f'done cleaning in {end - start:.3f}s')
 start = time()
 print('starting nmf...')
-components, mix, nmf_reconstruction_error = deconvolution.nmf_step(cleaned_spectra, n_components)
+components, mix, nmf_reconstruction_error = deconvolution.nmf_step(cleaned_spectra, n_components, init='nndsvdar')
 
 end = time()
 print(f'nmf done is {end-start:.3f}s')
@@ -144,9 +145,14 @@ def onclick(event):
             aa.scatter(sigma3, cleaned_spectra[broj], alpha=0.3, label=f'(cleaned) spectrum n°{broj}')
             aa.plot(sigma3, reconstructed_spectra[broj], '--k', label='reconstructed spectrum')
             for k in range(n_components):
-                aa.plot(sigma3, components[k]*mix[broj][k], label=f'Component {k} with mixing coeff of {mix[broj][k]:.3f}')
+                aa.plot(sigma3, components[k]*mix[broj][k], label=f'Component {k} contribution ({mix[broj][k]*100:.1f}%)')
+            
+#this next part is to reorganize the order of labels, so to put the scatter plot first
+            handles, labels = aa.get_legend_handles_labels()
+            order = list(np.arange(n_components+2))
+            new_order = [order[-1]]+order[:-1]
+            aa.legend([handles[idx] for idx in new_order],[labels[idx] for idx in new_order])
             aa.set_title(f'spectra from {y_pos}th line and {x_pos}th column')
-            aa.legend()
 #            aa.legend([f'(cleaned) spectre n°{broj}']+[f'Component {k} with mixing coeff of {mix[broj][k]:.3f}' for k in range(n_components)])
             ff.show()
     else:
