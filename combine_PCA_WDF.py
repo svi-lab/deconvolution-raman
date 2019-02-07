@@ -104,7 +104,7 @@ print(f'done cleaning in {end - start:.3f}s')
 start = time()
 print('starting nmf...')
 components, mix, nmf_reconstruction_error = deconvolution.nmf_step(cleaned_spectra, n_components)
-#reconstructed_spectra = np.dot(mix, components)
+
 end = time()
 print(f'nmf done is {end-start:.3f}s')
 #%%
@@ -113,6 +113,7 @@ for z in range(n_components):
     comp_max[z] = np.max(components[z])
     components[z] /= comp_max[z]
     mix[:,z] *= comp_max[np.newaxis,z]
+reconstructed_spectra = np.dot(mix, components)
 novi_mix = mix.reshape(n_y,n_x,n_components)
 #%%
 fi, ax = plt.subplots(int(np.ceil(np.sqrt(n_components))), int(np.ceil(np.sqrt(n_components/2))))
@@ -140,11 +141,13 @@ def onclick(event):
 
         if event.dblclick:
             ff,aa = plt.subplots()
-            aa.plot(sigma3, cleaned_spectra[broj])
+            aa.scatter(sigma3, cleaned_spectra[broj], alpha=0.3, label=f'(cleaned) spectrum n°{broj}')
+            aa.plot(sigma3, reconstructed_spectra[broj], '--k', label='reconstructed spectrum')
             for k in range(n_components):
-                aa.plot(sigma3, components[k]*mix[broj][k])
+                aa.plot(sigma3, components[k]*mix[broj][k], label=f'Component {k} with mixing coeff of {mix[broj][k]:.3f}')
             aa.set_title(f'spectra from {y_pos}th line and {x_pos}th column')
-            aa.legend([f'(cleaned) spectre n°{broj}']+[f'Component {k} with mixing coeff of {mix[broj][k]:.3f}' for k in range(n_components)])
+            aa.legend()
+#            aa.legend([f'(cleaned) spectre n°{broj}']+[f'Component {k} with mixing coeff of {mix[broj][k]:.3f}' for k in range(n_components)])
             ff.show()
     else:
         print("you clicked outside the canvas, you bastard :)")
