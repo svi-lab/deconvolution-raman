@@ -1,4 +1,5 @@
-Data/
+Data/*
+!Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf
 *_pycache*/
 *.pyc
 *ipynb
