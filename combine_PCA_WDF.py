@@ -104,7 +104,7 @@ if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
     
     spektar3[slice_to_exclude] = np.copy(spektar3[slice_replacement])
     zvrk = np.copy(spektar3.reshape(141,141,-1))
-    zvrk[107:137,131:141,:] = zvrk[107:137,100:110,:]
+    zvrk[107:137,131:141,:] = zvrk[107:137,100:110,:] # patching the hole in the sample
     spektar3 = zvrk.reshape(141**2,-1)
 #%%
 start = time()
