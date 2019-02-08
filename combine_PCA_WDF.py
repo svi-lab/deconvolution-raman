@@ -43,8 +43,8 @@ it will pop-up another plot with the spectra recorded at this point, together wi
 #filename = 'Data/Test-Na-SiO2 0079 droplet on quartz -532nm-obj50-p50-15s over night_Copy_Copy.wdf'#scan_type 2, measurement_type 2
 #filename = 'Data/Test quartz substrate -532nm-obj100-p100-10s.wdf'#scan_type 2, measurement_type 1
 #filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'#scan_type 2 (wtf?), measurement_type 3
-filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
-#filename = 'Data/M1ANMap_Depth_2mm_.wdf'
+#filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
+filename = 'Data/M1ANMap_Depth_2mm_.wdf'
 #filename = 'Data/M1SCMap_depth_.wdf'
 
 
@@ -68,14 +68,14 @@ spectra_slice = np.index_exp[:,x_axis_slice] # Nothing to see here, move along
 if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
     slice_to_exclude = slice(5217,5499)
     slice_replacement = slice(4935,5217)
+elif filename == 'Data/M1ANMap_Depth_2mm_.wdf': #Removing a few cosmic rays
+    slice_to_exclude = np.index_exp[[10411, 10277, 17583]]
+    slice_replacement = np.index_exp[[10412, 10278, 17584]]
 else:
-    slice_to_exclude = slice()
-    slice_replacement = slice()
+    slice_to_exclude = slice(None)
+    slice_replacement = slice(None)
     
-    
-    
-    
-    
+        
 # Reading the .wdf file:
 measurement_data = wdfReader.wdfReader(filename)
 
@@ -99,15 +99,15 @@ else:
 
 spektar3 = np.copy(spektar2[spectra_slice])
 sigma3 = np.copy(sigma2[x_axis_slice])
+spektar3[slice_to_exclude] = np.copy(spektar3[slice_replacement])
 
 if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
     
-    spektar3[slice_to_exclude] = np.copy(spektar3[slice_replacement])
     zvrk = np.copy(spektar3.reshape(141,141,-1))
     zvrk[107:137,131:141,:] = zvrk[107:137,100:110,:] # patching the hole in the sample
     spektar3 = zvrk.reshape(141**2,-1)
 #%%
-start = time()
+
 
 if False:#spektar3.shape[0] < spektar3.shape[1]:
     n_components, denoised_spectra = deconvolution.pca_step(spektar3)
@@ -122,7 +122,7 @@ else:
         (for exemple, if it turns out that one unique components accounts for 99% of variance,
         perhaps it should give you reassurance on the homogeinity of your sample)'''
         variance_pourc = np.cumsum(pca_fit.explained_variance_ratio_)
-        plt.scatter(np.arange(1,11,1),variance_pourc[1:11]) # plots from 1 to 10 components only
+        plt.scatter(np.arange(1,14,1),variance_pourc[1:14]) # plots from 1 to 13 components only
         plt.title("Double-click on the point to choose the number of components")#\n then middle-click to close the graph")
 #        plt.ylim(bottom=0.997, top=1.001)
         plt.xlabel("number of principal components")
@@ -132,7 +132,7 @@ else:
         
         for i in np.arange(len(x))[::-1]:
             if(x[i]==x[i-1]): # double click
-                x_value = int(np.floor(x[i][0]))
+                x_value = int(np.round(x[i][0]))
                 plt.close()
                 return x_value
 
@@ -142,14 +142,12 @@ else:
     
     denoised_spectra = pca.inverse_transform(denoised_spectra)
     print(f'The chosen number of components is: {n_components}')
-end = time()
-print(f'pca treatement done in {end-start:.3f}s')
+
 
 #%%
-start = time()
+
 cleaned_spectra = deconvolution.clean(sigma3, denoised_spectra, mode='area')
-end = time()
-print(f'done cleaning in {end - start:.3f}s')
+
 start = time()
 print('starting nmf... (be patient, this may take some time...)')
 components, mix, nmf_reconstruction_error = deconvolution.nmf_step(cleaned_spectra, n_components, init='nndsvdar')
