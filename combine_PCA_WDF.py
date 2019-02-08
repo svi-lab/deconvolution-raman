@@ -7,7 +7,6 @@ from scipy import integrate
 import h5py
 import numpy as np
 import seaborn as sns; sns.set()
-from copy import copy
 from timeit import default_timer as time
 #from tkinter import filedialog, Tk, messagebox
 '''This script uses Williams' script of deconvolution together with wdfReader to produce some informative graphical output.
@@ -39,7 +38,7 @@ it will pop-up another plot with the spectra recorded at this point, together wi
     
     
 '''
-
+# -----------------------Choose a file--------------------------------------------
 #filename = 'Data/Test-Na-SiO2 0079 -532nm-obj100-p100-10s over night carto.wdf'#scan_type 1, measurement_type 3
 #filename = 'Data/Test-Na-SiO2 0079 droplet on quartz -532nm-obj50-p50-15s over night_Copy_Copy.wdf'#scan_type 2, measurement_type 2
 #filename = 'Data/Test quartz substrate -532nm-obj100-p100-10s.wdf'#scan_type 2, measurement_type 1
@@ -47,24 +46,47 @@ it will pop-up another plot with the spectra recorded at this point, together wi
 filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
 #filename = 'Data/M1ANMap_Depth_2mm_.wdf'
 #filename = 'Data/M1SCMap_depth_.wdf'
-snake = True # The scanning mode: either always from left to right (snake = False), either left->right right->left (snake = True)
-n_components=5
+
+
+
+
+# -------------------------------
+snake: bool = True # The scanning mode: either always from left to right (snake = False), either left->right right->left (snake = True)
+n_components: int = 5
+
+
+
 # one should always check if the spectra were recorded with the dead pixels included or not
 # It turns out that firs 10 and the last 16 pixels on the Renishaw SVI spectrometer detector are reserved, 
 # and no signal is recorded on those pixels by the detector. So we should either enter these parameters inside the Wire settings
 # or if it's not done, remove those pixels here manually
 # Furthermore, we sometimes want to perform the deconvolution only on a part of the spectra, so here you define the part that interests you
-ssss = slice(575,950)
-spectra_slice = np.index_exp[:,ssss]
-kiko = wdfReader.wdfReader(filename)
+x_axis_slice = slice(575,950)
+spectra_slice = np.index_exp[:,x_axis_slice]
 
-spektar = kiko.get_spectra()
-sigma2 = kiko.get_xdata()
-lambda_laser = 10000000/kiko.laser_wavenumber
+# Next few lines serve to isolate case-to-case file-specific problems in map scans:
+if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
+    slice_to_exclude = slice(5217,5499)
+    slice_replacement = slice(4935,5217)
+else:
+    slice_to_exclude = slice()
+    slice_replacement = slice()
+    
+    
+    
+    
+    
+# Reading the .wdf file:
+measurement_data = wdfReader.wdfReader(filename)
 
-# The script only works for map scans for the moment    
-if kiko.measurement_type == 3:    
-    map_type, mapa, n_x, n_y, n_z = kiko.get_map_area()
+spektar = measurement_data.get_spectra()
+sigma2 = measurement_data.get_xdata()
+lambda_laser = 10000000/measurement_data.laser_wavenumber
+
+# The script only works for map scans for the moment
+# Reading the values concerning the map:   
+if measurement_data.measurement_type == 3: #measurement_type=3 corresponds to a map scan    
+    map_type, mapa, n_x, n_y, n_z = measurement_data.get_map_area()
     print('this is a map scan')
 else:
     raise SystemExit('not a map scan')
@@ -74,81 +96,88 @@ if snake == True:
     spektar2 = np.asarray(spektar1)
 else:
     spektar2 = spektar
-# Removing the outliers (as they were noticed in one of the scans, probably the firs file from those above)
-spektar3 = copy(spektar2[spectra_slice])#[:,10:-10])
-sigma3 = copy(sigma2[ssss])#[10:-10])
+
+spektar3 = np.copy(spektar2[spectra_slice])
+sigma3 = np.copy(sigma2[x_axis_slice])
 
 if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
-    # this is to remove the two lines with scanning problems:
-    spektar3[5217:5499] = copy(spektar3[4935:5217])
+    
+    spektar3[slice_to_exclude] = np.copy(spektar3[slice_replacement])
 #%%
 start = time()
 
-hajduk = []
-xxx = -1
 if False:#spektar3.shape[0] < spektar3.shape[1]:
     n_components, denoised_spectra = deconvolution.pca_step(spektar3)
 else:
     pca = decomposition.PCA()
     pca_fit = pca.fit(spektar3)
-# =============================================================================
-#     i should try with ginput()
-#     figura = plt.figure()
-#     def onclick2(event):
-#         global xxx
-#         xxx = int(np.round(event.xdata))
-#         plt.close()
-#     figura.canvas.mpl_connect('button_press_event', onclick2)
-#             
-#     plt.xlim(left=-0.2, right=12)
-#     plt.ylim(bottom=0.99, top=1.002)
-#     plt.scatter(np.arange(len(np.cumsum(pca_fit.explained_variance_ratio_))),np.cumsum(pca_fit.explained_variance_ratio_))
-# =============================================================================
-    
-    #pca.n_components = n_components
+  
+    def choose_ncomp():
+        plt.scatter(np.arange(1,11,1),np.cumsum(pca_fit.explained_variance_ratio_)[1:11])
+        plt.title("Double-click on the point to choose the number of components")#\n then middle-click to close the graph")
+#        plt.ylim(bottom=0.997, top=1.001)
+        plt.xlabel("number of principal components")
+        plt.ylabel("Variance % covered")
+        x = plt.ginput(2)
+        
+        for i in np.arange(len(x))[::-1]:
+            if(x[i]==x[i-1]): # double click
+                x_value = int(np.floor(x[i][0]))
+                plt.close()
+                return x_value
+
+    n_components = choose_ncomp()
+    pca.n_components = n_components
     denoised_spectra = pca.fit_transform(spektar3)
     
     denoised_spectra = pca.inverse_transform(denoised_spectra)
+    print(f'The chosen number of components is: {n_components}')
 end = time()
 print(f'pca treatement done in {end-start:.3f}s')
-print(f' ovo je izvana: {xxx}')
+
 #%%
 start = time()
-
 cleaned_spectra = deconvolution.clean(sigma3, denoised_spectra, mode='area')
-#cleaned_spectra /= np.max(cleaned_spectra, axis=1)[:,np.newaxis]
 end = time()
 print(f'done cleaning in {end - start:.3f}s')
 start = time()
-print('starting nmf...')
+print('starting nmf... (be patient, this may take some time...)')
 components, mix, nmf_reconstruction_error = deconvolution.nmf_step(cleaned_spectra, n_components, init='nndsvdar')
-
 end = time()
 print(f'nmf done is {end-start:.3f}s')
 #%%
-comp_max = np.empty(n_components)
+comp_area = np.empty(n_components)
 for z in range(n_components):
-    comp_max[z] = integrate.trapz(components[z])
-    components[z] /= comp_max[z]
-    mix[:,z] *= comp_max[np.newaxis,z]
+    comp_area[z] = integrate.trapz(components[z])
+    components[z] /= comp_area[z]
+    mix[:,z] *= comp_area[np.newaxis,z]
 reconstructed_spectra = np.dot(mix, components)
 novi_mix = mix.reshape(n_y,n_x,n_components)
-#%%
+#%% Plotting the components....
 fi, ax = plt.subplots(int(np.ceil(np.sqrt(n_components))), int(np.ceil(np.sqrt(n_components/2))))
-ax = ax.ravel()
+if n_components > 1:
+    ax = ax.ravel()
+else:
+    ax = [ax]
 for i in range(n_components):
     ax[i].plot(sigma3, components[i].T)
     ax[i].set_title(f'Component {i}')
-#%%
-#novi_mix[38] = copy(novi_mix[36])
+    ax[i].set_yticks([])
+
+#%% Plotting the main plot...
 fig, ax = plt.subplots(int(np.ceil(np.sqrt(n_components))), int(np.ceil(np.sqrt(n_components/2))))
-ax = ax.ravel()
+if n_components > 1:
+    ax = ax.ravel()
+else:
+    ax = [ax]
 def onclick(event):
+    '''Double-clicking on a pixel will pop-up the (cleaned) spectrum corresponding to that pixel, as well as it's deconvolution on the components
+    and again the reconstruction for visual comparison'''
     if event.inaxes:
-        a = event.inaxes
-        for ii, axax in enumerate(ax):
-            if axax == a:
-                iii = ii
+#        a = event.inaxes
+#        for ii, axax in enumerate(ax):
+#            if axax == a:
+#                iii = ii
             
         x_pos = int(np.floor(event.xdata))
         y_pos = int(np.floor(event.ydata))
@@ -170,7 +199,6 @@ def onclick(event):
             new_order = [order[-1]]+order[:-1]
             aa.legend([handles[idx] for idx in new_order],[labels[idx] for idx in new_order])
             aa.set_title(f'spectra from {y_pos}th line and {x_pos}th column')
-#            aa.legend([f'(cleaned) spectre n°{broj}']+[f'Component {k} with mixing coeff of {mix[broj][k]:.3f}' for k in range(n_components)])
             ff.show()
     else:
         print("you clicked outside the canvas, you bastard :)")
@@ -182,16 +210,6 @@ fig.canvas.mpl_connect('button_press_event', onclick)
 
 
 #%%
-# =============================================================================
-# ag = deconvolution.area_graph_generator(sigma2, spektar, mix, components)
-# 
-# n_samples = kiko.count
-# for i in range(0, n_samples, int(n_samples / 5)):
-#     ag(i)
-# 
-# deconvolution.view_pca_denoising(sigma2, spektar, denoised_spectra)
-# =============================================================================
-
 
 
 # =============================================================================
