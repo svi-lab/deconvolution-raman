@@ -1,4 +1,4 @@
 Data/
-__pycache__/
-__pycache__/
-__pycache__/
+*_pycache*/
+*.pyc
+*ipynb

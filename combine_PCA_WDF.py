@@ -84,18 +84,35 @@ if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
 #%%
 start = time()
 
-
+hajduk = []
+xxx = -1
 if False:#spektar3.shape[0] < spektar3.shape[1]:
     n_components, denoised_spectra = deconvolution.pca_step(spektar3)
 else:
-    pca = decomposition.PCA(n_components=n_components)
-    #pca.fit(spektar3)
+    pca = decomposition.PCA()
+    pca_fit = pca.fit(spektar3)
+# =============================================================================
+#     i should try with ginput()
+#     figura = plt.figure()
+#     def onclick2(event):
+#         global xxx
+#         xxx = int(np.round(event.xdata))
+#         plt.close()
+#     figura.canvas.mpl_connect('button_press_event', onclick2)
+#             
+#     plt.xlim(left=-0.2, right=12)
+#     plt.ylim(bottom=0.99, top=1.002)
+#     plt.scatter(np.arange(len(np.cumsum(pca_fit.explained_variance_ratio_))),np.cumsum(pca_fit.explained_variance_ratio_))
+# =============================================================================
+    
     #pca.n_components = n_components
     denoised_spectra = pca.fit_transform(spektar3)
+    
     denoised_spectra = pca.inverse_transform(denoised_spectra)
 end = time()
 print(f'pca treatement done in {end-start:.3f}s')
-
+print(f' ovo je izvana: {xxx}')
+#%%
 start = time()
 
 cleaned_spectra = deconvolution.clean(sigma3, denoised_spectra, mode='area')
