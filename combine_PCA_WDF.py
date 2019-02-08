@@ -62,7 +62,7 @@ n_components: int = 5
 # or if it's not done, remove those pixels here manually
 # Furthermore, we sometimes want to perform the deconvolution only on a part of the spectra, so here you define the part that interests you
 x_axis_slice = slice(575,950)
-spectra_slice = np.index_exp[:,x_axis_slice]
+spectra_slice = np.index_exp[:,x_axis_slice] # Nothing to see here, move along
 
 # Next few lines serve to isolate case-to-case file-specific problems in map scans:
 if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
