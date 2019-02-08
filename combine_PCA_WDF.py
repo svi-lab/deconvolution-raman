@@ -103,6 +103,9 @@ sigma3 = np.copy(sigma2[x_axis_slice])
 if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
     
     spektar3[slice_to_exclude] = np.copy(spektar3[slice_replacement])
+    zvrk = np.copy(spektar3.reshape(141,141,-1))
+    zvrk[107:137,131:141,:] = zvrk[107:137,100:110,:]
+    spektar3 = zvrk.reshape(141**2,-1)
 #%%
 start = time()
 
@@ -113,11 +116,18 @@ else:
     pca_fit = pca.fit(spektar3)
   
     def choose_ncomp():
-        plt.scatter(np.arange(1,11,1),np.cumsum(pca_fit.explained_variance_ratio_)[1:11])
+        '''This plot serves as interface for selecting the number of components to use in NMF.
+        It plots the variance pourcentage against the number of components.
+        Note that this can be usefull to estimate the homogeneity of the sample
+        (for exemple, if it turns out that one unique components accounts for 99% of variance,
+        perhaps it should give you reassurance on the homogeinity of your sample)'''
+        variance_pourc = np.cumsum(pca_fit.explained_variance_ratio_)
+        plt.scatter(np.arange(1,11,1),variance_pourc[1:11]) # plots from 1 to 10 components only
         plt.title("Double-click on the point to choose the number of components")#\n then middle-click to close the graph")
 #        plt.ylim(bottom=0.997, top=1.001)
         plt.xlabel("number of principal components")
         plt.ylabel("Variance % covered")
+        print(f'variance % covered with one single component is {variance_pourc[1]*100:.3f}%')
         x = plt.ginput(2)
         
         for i in np.arange(len(x))[::-1]:
