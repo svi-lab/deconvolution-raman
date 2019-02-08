@@ -260,10 +260,9 @@ def pca_step(raw_spectra, graph=False):
     view_pca_denoising : to compare spectra before and after pca_step
     """
     n_samples, n_features = raw_spectra.shape
-    n_param = min(n_samples, n_features)
     pca = decomposition.PCA()
     pca.fit(raw_spectra)   # Fit the data
-    eigenvalues = np.sqrt(n_param * pca.explained_variance_)
+    eigenvalues = np.sqrt(n_samples * pca.explained_variance_)
     variance_ratio = pca.explained_variance_ratio_.copy()
 
     def min_spectra(threshold):
