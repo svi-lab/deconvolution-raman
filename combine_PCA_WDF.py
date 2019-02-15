@@ -4,10 +4,11 @@ import deconvolution
 import matplotlib.pyplot as plt
 from sklearn import decomposition
 from scipy import integrate
-import h5py
+#import h5py
 import numpy as np
 import seaborn as sns; sns.set()
 from timeit import default_timer as time
+import wdfReader_new
 #from tkinter import filedialog, Tk, messagebox
 '''This script uses Williams' script of deconvolution together with wdfReader to produce some informative graphical output.
 ATTENTION: For the momoent, the scripts works only on  map scans (.wdf files)
@@ -44,15 +45,28 @@ it will pop-up another plot with the spectra recorded at this point, together wi
 #filename = 'Data/Test quartz substrate -532nm-obj100-p100-10s.wdf'#scan_type 2, measurement_type 1
 #filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'#scan_type 2 (wtf?), measurement_type 3
 #filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
-filename = 'Data/M1ANMap_Depth_2mm_.wdf'
+#filename = 'Data/M1ANMap_Depth_2mm_.wdf'
 #filename = 'Data/M1SCMap_depth_.wdf'
-
+filename = 'Data/drop4.wdf'
+#filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
 
 
 
 # -------------------------------
-snake: bool = True # The scanning mode: either always from left to right (snake = False), either left->right right->left (snake = True)
-n_components: int = 5
+snake: bool = False # The scanning mode: either always from left to right (snake = False), either left->right right->left (snake = True)
+Slice: bool = True
+
+
+
+
+    
+        
+# Reading the .wdf file:
+measurement_data = wdfReader.wdfReader(filename)
+
+spektar = measurement_data.get_spectra()
+sigma2 = measurement_data.get_xdata()
+lambda_laser = 10000000/measurement_data.laser_wavenumber
 
 
 
@@ -61,7 +75,13 @@ n_components: int = 5
 # and no signal is recorded on those pixels by the detector. So we should either enter these parameters inside the Wire settings
 # or if it's not done, remove those pixels here manually
 # Furthermore, we sometimes want to perform the deconvolution only on a part of the spectra, so here you define the part that interests you
-x_axis_slice = slice(575,950)
+#slice_values = (500,1000)
+
+#coupe_bas = np.where(sigma2 == min(sigma2, key=lambda v: abs(slice_values[0]-v))[0][0])
+##coupe_bas = np.where(np.floor(sigma2)==200)[0][0] # position en cm-1
+#coupe_haut = np.where(min(sigma2, key=lambda v: abs(slice_values[0]-v))) # position en cm-1
+#x_axis_slice = slice(coupe_haut,coupe_bas)
+x_axis_slice = slice(20,1029)
 spectra_slice = np.index_exp[:,x_axis_slice] # Nothing to see here, move along
 
 # Next few lines serve to isolate case-to-case file-specific problems in map scans:
@@ -71,17 +91,15 @@ if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
 elif filename == 'Data/M1ANMap_Depth_2mm_.wdf': #Removing a few cosmic rays
     slice_to_exclude = np.index_exp[[10411, 10277, 17583]]
     slice_replacement = np.index_exp[[10412, 10278, 17584]]
+elif filename == 'Data/drop4.wdf': #Removing a few cosmic rays manually
+    slice_to_exclude = np.index_exp[[16021, 5554, 447, 14650, 16261, 12463, 14833, 13912, 5392, 11073, 16600, 20682, 2282, 18162, 20150, 12473, 4293, 16964, 19400]]
+    slice_replacement = np.index_exp[[16020, 5555, 446, 14649, 16262, 12462, 14834, 13911, 5391, 11072,16601, 20683, 2283, 18163, 20151, 12474, 4294, 16965, 19401]]
+elif filename == 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf': #Removing a few cosmic rays
+    slice_to_exclude = np.index_exp[[1717, 11809, 2254, 3220, 6833]]
+    slice_replacement = np.index_exp[[1718, 11808, 2255, 3221, 6832]]
 else:
     slice_to_exclude = slice(None)
     slice_replacement = slice(None)
-    
-        
-# Reading the .wdf file:
-measurement_data = wdfReader.wdfReader(filename)
-
-spektar = measurement_data.get_spectra()
-sigma2 = measurement_data.get_xdata()
-lambda_laser = 10000000/measurement_data.laser_wavenumber
 
 # The script only works for map scans for the moment
 # Reading the values concerning the map:   
@@ -144,25 +162,31 @@ else:
     print(f'The chosen number of components is: {n_components}')
 
 
-#%%
+#%% NMF step
 
 cleaned_spectra = deconvolution.clean(sigma3, denoised_spectra, mode='area')
+#cleaned_spectra = deconvolution.clean(sigma3, spektar3, mode='area')
 
 start = time()
 print('starting nmf... (be patient, this may take some time...)')
 components, mix, nmf_reconstruction_error = deconvolution.nmf_step(cleaned_spectra, n_components, init='nndsvdar')
 end = time()
 print(f'nmf done is {end-start:.3f}s')
-#%%
+#%% 
+if Slice:
+    y_points_nb = n_z
+else:
+    y_points_nb = n_y
+mix.resize(n_x*y_points_nb,n_components, )
 comp_area = np.empty(n_components)
 for z in range(n_components):
-    comp_area[z] = integrate.trapz(components[z])
-    components[z] /= comp_area[z]
-    mix[:,z] *= comp_area[np.newaxis,z]
+    comp_area[z] = integrate.trapz(components[z])# area beneath each component
+    components[z] /= comp_area[z]# normalizing the components by area
+    mix[:,z] *= comp_area[np.newaxis,z]# renormalizing the mixture coefficients
 reconstructed_spectra = np.dot(mix, components)
-novi_mix = mix.reshape(n_y,n_x,n_components)
+novi_mix = mix.reshape(y_points_nb,n_x,n_components)
 #%% Plotting the components....
-fi, ax = plt.subplots(int(np.ceil(np.sqrt(n_components))), int(np.ceil(np.sqrt(n_components/2))))
+fi, ax = plt.subplots(int(np.floor(np.sqrt(n_components))), int(np.ceil(n_components/np.floor(np.sqrt(n_components)))))
 if n_components > 1:
     ax = ax.ravel()
 else:
@@ -173,7 +197,7 @@ for i in range(n_components):
     ax[i].set_yticks([])
 
 #%% Plotting the main plot...
-fig, ax = plt.subplots(int(np.ceil(np.sqrt(n_components))), int(np.ceil(np.sqrt(n_components/2))))
+fig, ax = plt.subplots(int(np.floor(np.sqrt(n_components))), int(np.ceil(n_components/np.floor(np.sqrt(n_components)))))
 if n_components > 1:
     ax = ax.ravel()
 else:
@@ -190,8 +214,8 @@ def onclick(event):
         x_pos = int(np.floor(event.xdata))
         y_pos = int(np.floor(event.ydata))
 
-        line_px = n_y
-
+#        line_px = n_y
+        line_px=n_x # penser à changer pour slice
         broj = int(y_pos * line_px + x_pos)
 
         if event.dblclick:
