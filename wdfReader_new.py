@@ -1,19 +1,23 @@
 # -*- coding: latin-1 -*-
 from __future__ import print_function
-import struct
 import numpy as np
 import os
 import time
 import warnings
+import pandas as pd
+
 
 DATA_TYPES = ['Arbitrary','Spectral','Intensity','SpatialX','SpatialY','SpatialZ','SpatialR','SpatialTheta','SpatialPhi','Temperature','Pressure','Time','Derived','Polarization','FocusTrack','RampRate','Checksum','Flags','ElapsedTime','Frequency','MpWellSpatialX','MpWellSpatialY','MpLocationIndex','MpWellReference','PAFZActual','PAFZError','PAFSignalUsed','ExposureTime','EndMarker']
 DATA_UNITS = ['Arbitrary','RamanShift','Wavenumber','Nanometre','ElectronVolt','Micron','Counts','Electrons','Millimetres','Metres','Kelvin','Pascal','Seconds','Milliseconds','Hours','Days','Pixels','Intensity','RelativeIntensity','Degrees','Radians','Celcius','Farenheit','KelvinPerMinute','FileTime','Microseconds','EndMarker']
 SCAN_TYPES = ['Unspecified','Static','Continuous','StepRepeat','FilterScan','FilterImage','StreamLine','StreamLineHR','Point','MultitrackDiscrete','LineFocusMapping']
-#filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'
+MAP_TYPES = {0:'RandomPoints', 1:'ColumnMajor', 2:'Alternating', 3:'LineFocusMapping', 4:'InvertedRows', 5:'InvertedColumns', 6:'SurfaceProfile', 7:'XyLine', 128:'Slice'}
+MEASUREMENT_TYPES = ['Unspecified', 'Single', 'Series', 'Map']
+WDF_FLAGS = ['WdfXYXY','WdfChecksum','WdfCosmicRayRemoval','WdfMultitrack','WdfSaturation','WdfFileBackup','WdfTemporary','WdfSlice','WdfPQ']
+filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'
 #filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
 #filename='Data/M1ANMap_Depth_2mm_.wdf'
 #filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-101.wdf'
-filename = 'Data/drop4.wdf'
+#filename = 'Data/drop4.wdf'
 #filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
 try:
     f = open(filename, 'rb')
@@ -56,7 +60,7 @@ gen = [i for i,x in enumerate(block_names) if x==name]
 for i in gen:
     print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}")
     f.seek(b_off[i]+16)
-    params['WdfFlag'] = _read(f,np.uint64)#['WdfXYXY','WdfChecksum','WdfCosmicRayRemoval','WdfMultitrack','WdfSaturation','WdfFileBackup','WdfTemporary','WdfSlice','WdfPQ'][_read(f,np.uint64)]
+    params['WdfFlag'] = _read(f,np.uint64)#WDF_FLAGS[_read(f,np.uint64)]
     f.seek(60)
     params['PointsPerSpectrum'] = npoints = _read(f)
     params['Capacity'] = nspectra = _read(f, np.uint64) # Number of spectra measured (nspectra)
@@ -68,7 +72,7 @@ for i in gen:
     params['ApplicationName'] = _read(f, '|S24').decode()
     params['ApplicationVersion'] = _read(f, np.uint16, count=4)
     params['ScanType'] = SCAN_TYPES[_read(f)]
-    params['MeasurementType'] = ['Unspecified', 'Single', 'Series', 'Map'][_read(f)]
+    params['MeasurementType'] = MEASUREMENT_TYPES[_read(f)]
     params['StartTime'] = convert_time(_read(f,np.uint64))
     params['EndTime'] = convert_time(_read(f,np.uint64))
     params['SpectralUnits'] = DATA_UNITS[_read(f)]
@@ -80,6 +84,27 @@ for key, val in params.items():
 if nspectra != ncollected:
     warnings.warn(f'\nNot all spectra were recorded\nnspectra={nspectra}, while ncollected={ncollected}\nThe missing values will be filled with zeros.')
 
+
+
+name = 'WMAP'
+map_params = {}
+gen = [i for i,x in enumerate(block_names) if x==name]
+for i in gen:
+    print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}")
+    f.seek(b_off[i]+16)
+#    m_flag = _read(f)
+    map_params['MapAreaType'] = MAP_TYPES[_read(f)]#[m_flag+(8-m_flag)*(m_flag//128)]
+    _read(f)
+    map_params['InitialCoordinates'] = np.round(_read(f, '<f', count=3),2)
+    map_params['StepSizes'] = np.round(_read(f, '<f', count=3),2)
+    map_params['NbSteps'] = n_x,n_y,n_z = _read(f, np.uint32, count=3)
+    map_params['LineFocusSize'] = _read(f)
+for key, val in map_params.items():
+    print(f'{key} : \t{val}')
+ 
+
+
+
 name = 'DATA'
 gen = [i for i,x in enumerate(block_names) if x==name]
 for i in gen:
@@ -87,6 +112,9 @@ for i in gen:
     print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}")
     f.seek(b_off[i]+16)
     spectra = _read(f,'<f', count=data_points_count).reshape(nspectra, npoints)
+    if map_params['MapAreaType'] == 'InvertedRows':
+        spectra = [spectra[((xx//n_x)+1)*n_x-(xx%n_x)-1] if (xx//n_x)%2==1 else spectra[xx] for xx in range(nspectra)]
+        spectra = np.asarray(spectra)
     print(f'the shape of the spectra is: {spectra.shape}')
     
 
@@ -133,22 +161,10 @@ for i in gen:
 
 
 
-
-
-name = 'WMAP'
-map_params = {}
-gen = [i for i,x in enumerate(block_names) if x==name]
-for i in gen:
-    print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}")
-    f.seek(b_off[i]+16)
-    m_flag = _read(f)
-    map_params['MapAreaType'] = ['RandomPoints', 'ColumnMajor', 'Alternating', 'LineFocusMapping', 'InvertedRows', 'InvertedColumns', 'SurfaceProfile', 'XyLine', 'Slice'][m_flag+(8-m_flag)*(m_flag//128)]
-    _read(f)
-    map_params['InitialCoordinates'] = np.round(_read(f, '<f', count=3),2)
-    map_params['StepSizes'] = np.round(_read(f, '<f', count=3),2)
-    map_params['NbSteps'] = _read(f, np.uint32, count=3)
-    map_params['LineFocusSize'] = _read(f)
-for key, val in map_params.items():
-    print(f'{key} : \t{val}')
-    
+self.params
+self.map_params
+self.x_values
+self.spectra
+self.origins = pd.DataFrame(origin_values.T, columns=[origin_labels, origin_set_dtypes, origin_set_units])
+   
 print('\n\n\n')
