@@ -5,28 +5,25 @@ import os
 import time
 import warnings
 import pandas as pd
-
-
+#filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'
+#filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
+#filename='Data/M1ANMap_Depth_2mm_.wdf'
+#filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-101.wdf'
+filename = 'Data/drop4.wdf'
+#filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
+f = open(filename, 'rb')
+print(f'Reading the file: \n{filename}\n')
+filesize = os.path.getsize(filename)
+#class read_WDF(filename):
+#    def __init__
 DATA_TYPES = ['Arbitrary','Spectral','Intensity','SpatialX','SpatialY','SpatialZ','SpatialR','SpatialTheta','SpatialPhi','Temperature','Pressure','Time','Derived','Polarization','FocusTrack','RampRate','Checksum','Flags','ElapsedTime','Frequency','MpWellSpatialX','MpWellSpatialY','MpLocationIndex','MpWellReference','PAFZActual','PAFZError','PAFSignalUsed','ExposureTime','EndMarker']
 DATA_UNITS = ['Arbitrary','RamanShift','Wavenumber','Nanometre','ElectronVolt','Micron','Counts','Electrons','Millimetres','Metres','Kelvin','Pascal','Seconds','Milliseconds','Hours','Days','Pixels','Intensity','RelativeIntensity','Degrees','Radians','Celcius','Farenheit','KelvinPerMinute','FileTime','Microseconds','EndMarker']
 SCAN_TYPES = ['Unspecified','Static','Continuous','StepRepeat','FilterScan','FilterImage','StreamLine','StreamLineHR','Point','MultitrackDiscrete','LineFocusMapping']
 MAP_TYPES = {0:'RandomPoints', 1:'ColumnMajor', 2:'Alternating', 3:'LineFocusMapping', 4:'InvertedRows', 5:'InvertedColumns', 6:'SurfaceProfile', 7:'XyLine', 128:'Slice'}
 MEASUREMENT_TYPES = ['Unspecified', 'Single', 'Series', 'Map']
 WDF_FLAGS = ['WdfXYXY','WdfChecksum','WdfCosmicRayRemoval','WdfMultitrack','WdfSaturation','WdfFileBackup','WdfTemporary','WdfSlice','WdfPQ']
-filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'
-#filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
-#filename='Data/M1ANMap_Depth_2mm_.wdf'
-#filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-101.wdf'
-#filename = 'Data/drop4.wdf'
-#filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
-try:
-    f = open(filename, 'rb')
-except:
-    raise ImportError('File not found. Check your filename.')
 
-filesize = os.path.getsize(filename)
 
-print(filename)
 def _read(f=f, dtype=np.uint32, count=1):
     '''Reads bytes from binary file, with the most common values given as default.
     Returns the value itself if one value, or list if count > 1
@@ -39,6 +36,7 @@ def _read(f=f, dtype=np.uint32, count=1):
 def convert_time(t):
     '''Takes the Windows 64bit timestamp and converts it to human readable format'''
     return time.strftime('%c', time.gmtime((t/1e7-11644473600)))
+
 
 block_names=[]
 block_sizes=[]
@@ -82,7 +80,7 @@ for i in gen:
 for key, val in params.items():
     print(f'{key} : \t{val}')
 if nspectra != ncollected:
-    warnings.warn(f'\nNot all spectra were recorded\nnspectra={nspectra}, while ncollected={ncollected}\nThe missing values will be filled with zeros.')
+    warnings.warn(f'\nNot all spectra were recorded\nnspectra={nspectra}, while ncollected={ncollected}\nThe {nspectra-ncollected} missing values will be filled with zeros.')
 
 
 
@@ -131,7 +129,7 @@ name = 'YLST' # This is where the image is stored (if recorded)
 gen = [i for i,x in enumerate(block_names) if x==name]
 for i in gen:
     print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}")
-    f.seek(b_off[i]+16)
+    f.seek(b_off[i]+24)
 #    params['YlistDataType'] = DATA_TYPES[_read(f)]
 #    params['YlistDataUnits'] = DATA_UNITS[_read(f)]
     y_values_count = int((block_sizes[i]-24)/4) # if > 1, we can say that this is the number of pixels in the recorded microscope image
@@ -160,11 +158,13 @@ for i in gen:
             origin_values[set_n] = np.round(_read(f, '<d', count=nspectra),2)
 
 
+  
 
-self.params
-self.map_params
-self.x_values
-self.spectra
-self.origins = pd.DataFrame(origin_values.T, columns=[origin_labels, origin_set_dtypes, origin_set_units])
-   
+
+#self.measure_params = params
+#self.map_params = map_params
+#self.x_values = x_values
+#self.spectra = spectra
+#self.origins = pd.DataFrame(origin_values.T, columns=[origin_labels, origin_set_dtypes, origin_set_units])
+#   
 print('\n\n\n')
