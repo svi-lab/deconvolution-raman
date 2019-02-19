@@ -101,7 +101,7 @@ def read_WDF(filename):
         f.seek(240)
         params['Title'] = _read(f,'|S160').decode()
     if nspectra != ncollected:
-        print(f'\nATTENTION:\nNot all spectra were recorded\nnspectra={nspectra}, while ncollected={ncollected}\nThe {nspectra-ncollected} missing values will be filled with zeros.\n')
+        print(f'\nATTENTION:\nNot all spectra were recorded\nnspectra={nspectra}, while ncollected={ncollected}\nThe {nspectra-ncollected} missing values will still be missing\n')#be filled with zeros.\n')
     for key, val in params.items():
         print(f'{key} : \t{val}')
     
@@ -129,10 +129,10 @@ def read_WDF(filename):
     name = 'DATA'
     gen = [i for i,x in enumerate(block_names) if x==name]
     for i in gen:
-        data_points_count=npoints*nspectra
+        data_points_count=npoints*ncollected
         print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}")
         f.seek(b_off[i]+16)
-        spectra = _read(f,'<f', count=data_points_count).reshape(nspectra, npoints)
+        spectra = _read(f,'<f', count=data_points_count).reshape(ncollected, npoints)
         if map_params['MapAreaType'] == 'InvertedRows':
             spectra = [spectra[((xx//n_x)+1)*n_x-(xx%n_x)-1] if (xx//n_x)%2==1 else spectra[xx] for xx in range(nspectra)]
             spectra = np.asarray(spectra)
@@ -178,7 +178,7 @@ def read_WDF(filename):
     origin_values = np.empty((params['DataOriginCount'],nspectra), dtype='<d')
     gen = [i for i,x in enumerate(block_names) if x==name]
     for i in gen:
-        print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}")
+        print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}\n\n\n")
         f.seek(b_off[i]+16)
         nb_origin_sets = _read(f) # This is the same as params['DataOriginCount']
         for set_n in range(nb_origin_sets):

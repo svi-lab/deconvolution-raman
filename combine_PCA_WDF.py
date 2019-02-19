@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import wdfReader
+from wdfReader_new import convert_time, read_WDF
 import deconvolution
 import matplotlib.pyplot as plt
 from sklearn import decomposition
@@ -8,7 +8,7 @@ from scipy import integrate
 import numpy as np
 import seaborn as sns; sns.set()
 from timeit import default_timer as time
-import wdfReader_new
+import pandas as pd
 #from tkinter import filedialog, Tk, messagebox
 '''This script uses Williams' script of deconvolution together with wdfReader to produce some informative graphical output.
 ATTENTION: For the momoent, the scripts works only on  map scans (.wdf files)
@@ -51,37 +51,24 @@ filename = 'Data/drop4.wdf'
 #filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
 
 
-
-# -------------------------------
-snake: bool = False # The scanning mode: either always from left to right (snake = False), either left->right right->left (snake = True)
-Slice: bool = True
+measure_params, map_params, sigma2, spectra, origins = read_WDF(filename)
 
 
 
 
-    
-        
-# Reading the .wdf file:
-measurement_data = wdfReader.wdfReader(filename)
-
-spektar = measurement_data.get_spectra()
-sigma2 = measurement_data.get_xdata()
-lambda_laser = 10000000/measurement_data.laser_wavenumber
-
-
+#%% SLICING....
 
 # one should always check if the spectra were recorded with the dead pixels included or not
 # It turns out that firs 10 and the last 16 pixels on the Renishaw SVI spectrometer detector are reserved, 
 # and no signal is recorded on those pixels by the detector. So we should either enter these parameters inside the Wire settings
 # or if it's not done, remove those pixels here manually
 # Furthermore, we sometimes want to perform the deconvolution only on a part of the spectra, so here you define the part that interests you
-#slice_values = (500,1000)
+slice_values = (920,1120)# give your zone in cm-1
 
-#coupe_bas = np.where(sigma2 == min(sigma2, key=lambda v: abs(slice_values[0]-v))[0][0])
-##coupe_bas = np.where(np.floor(sigma2)==200)[0][0] # position en cm-1
-#coupe_haut = np.where(min(sigma2, key=lambda v: abs(slice_values[0]-v))) # position en cm-1
+_coupe_bas = np.where(sigma2 == min(sigma2, key=lambda v: abs(slice_values[0]-v)))[0][0]
+_coupe_haut = np.where(sigma2 == min(sigma2, key=lambda v: abs(slice_values[1]-v)))[0][0]
 #x_axis_slice = slice(coupe_haut,coupe_bas)
-x_axis_slice = slice(20,1029)
+x_axis_slice = slice(_coupe_haut,_coupe_bas) # you need to remember the order of the shifts is recorded from higher to lower
 spectra_slice = np.index_exp[:,x_axis_slice] # Nothing to see here, move along
 
 # Next few lines serve to isolate case-to-case file-specific problems in map scans:
@@ -94,6 +81,7 @@ elif filename == 'Data/M1ANMap_Depth_2mm_.wdf': #Removing a few cosmic rays
 elif filename == 'Data/drop4.wdf': #Removing a few cosmic rays manually
     slice_to_exclude = np.index_exp[[16021, 5554, 447, 14650, 16261, 12463, 14833, 13912, 5392, 11073, 16600, 20682, 2282, 18162, 20150, 12473, 4293, 16964, 19400]]
     slice_replacement = np.index_exp[[16020, 5555, 446, 14649, 16262, 12462, 14834, 13911, 5391, 11072,16601, 20683, 2283, 18163, 20151, 12474, 4294, 16965, 19401]]
+    
 elif filename == 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf': #Removing a few cosmic rays
     slice_to_exclude = np.index_exp[[1717, 11809, 2254, 3220, 6833]]
     slice_replacement = np.index_exp[[1718, 11808, 2255, 3221, 6832]]
@@ -101,91 +89,96 @@ else:
     slice_to_exclude = slice(None)
     slice_replacement = slice(None)
 
-# The script only works for map scans for the moment
-# Reading the values concerning the map:   
-if measurement_data.measurement_type == 3: #measurement_type=3 corresponds to a map scan    
-    map_type, mapa, n_x, n_y, n_z = measurement_data.get_map_area()
-    print('this is a map scan')
-else:
-    raise SystemExit('not a map scan')
 
-if snake == True:
-    spektar1 = [spektar[((xx//n_x)+1)*n_x-(xx%n_x)-1] if (xx//n_x)%2==1 else spektar[xx] for xx in range(spektar.shape[0])]
-    spektar2 = np.asarray(spektar1)
-else:
-    spektar2 = spektar
 
-spektar3 = np.copy(spektar2[spectra_slice])
+spektar3 = np.copy(spectra[spectra_slice])
 sigma3 = np.copy(sigma2[x_axis_slice])
 spektar3[slice_to_exclude] = np.copy(spektar3[slice_replacement])
-
+spektar3 = spektar3[7007:]
 if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
     
     zvrk = np.copy(spektar3.reshape(141,141,-1))
     zvrk[107:137,131:141,:] = zvrk[107:137,100:110,:] # patching the hole in the sample
     spektar3 = zvrk.reshape(141**2,-1)
-#%%
+#%% PCA...
 
 
-if False:#spektar3.shape[0] < spektar3.shape[1]:
-    n_components, denoised_spectra = deconvolution.pca_step(spektar3)
-else:
-    pca = decomposition.PCA()
-    pca_fit = pca.fit(spektar3)
-  
-    def choose_ncomp():
-        '''This plot serves as interface for selecting the number of components to use in NMF.
-        It plots the variance pourcentage against the number of components.
-        Note that this can be usefull to estimate the homogeneity of the sample
-        (for exemple, if it turns out that one unique components accounts for 99% of variance,
-        perhaps it should give you reassurance on the homogeinity of your sample)'''
-        variance_pourc = np.cumsum(pca_fit.explained_variance_ratio_)
-        plt.scatter(np.arange(1,14,1),variance_pourc[1:14]) # plots from 1 to 13 components only
-        plt.title("Double-click on the point to choose the number of components")#\n then middle-click to close the graph")
-#        plt.ylim(bottom=0.997, top=1.001)
-        plt.xlabel("number of principal components")
-        plt.ylabel("Variance % covered")
-        print(f'variance % covered with one single component is {variance_pourc[1]*100:.3f}%')
-        x = plt.ginput(2)
-        
-        for i in np.arange(len(x))[::-1]:
-            if(x[i]==x[i-1]): # double click
-                x_value = int(np.round(x[i][0]))
-                plt.close()
-                return x_value
-
-    n_components = choose_ncomp()
-    pca.n_components = n_components
-    denoised_spectra = pca.fit_transform(spektar3)
+pca = decomposition.PCA()
+pca_fit = pca.fit(spektar3)
+# =============================================================================
+#   
+# def choose_ncomp():
+#     '''This plot serves as interface for selecting the number of components to use in NMF.
+#     '''
+#     variance_pourc = np.cumsum(pca_fit.explained_variance_ratio_)[:35]
+#     test = 1e6*((-(variance_pourc**2) + 1))/np.sqrt((25-(np.arange(len(variance_pourc))-1)))
+#     plt.scatter(np.arange(4,len(test)),test[4:]) # plots from 1 to 13 components only
+#     plt.title("Double-click on the point to choose the number of components")#\n then middle-click to close the graph")
+# #        plt.ylim(bottom=0.008928, top=0.00894)
+#     plt.xlabel("number of principal components")
+#     plt.ylabel("Variance % covered")
+#     print(f'variance % covered with one single component is {variance_pourc[1]*100:.3f}%')
+#     x = plt.ginput(2)
+#     
+#     for i in np.arange(len(x))[::-1]:
+#         if(x[i]==x[i-1]): # double click
+#             x_value = int(np.round(x[i][0]))
+#             plt.close()
+#             return x_value
+# 
+# =============================================================================
+n_components = 2#choose_ncomp()
     
-    denoised_spectra = pca.inverse_transform(denoised_spectra)
-    print(f'The chosen number of components is: {n_components}')
+pca.n_components = n_components
 
+
+denoised_spectra = pca.fit_transform(spektar3)
+
+denoised_spectra = pca.inverse_transform(denoised_spectra)
+print(f'The chosen number of components is: {n_components}')
+
+cleaned_spectra = deconvolution.clean(sigma3, denoised_spectra, mode='area')
 
 #%% NMF step
 
-cleaned_spectra = deconvolution.clean(sigma3, denoised_spectra, mode='area')
+
 #cleaned_spectra = deconvolution.clean(sigma3, spektar3, mode='area')
 
 start = time()
 print('starting nmf... (be patient, this may take some time...)')
-components, mix, nmf_reconstruction_error = deconvolution.nmf_step(cleaned_spectra, n_components, init='nndsvdar')
+components, mix, nmf_reconstruction_error = deconvolution.nmf_step(cleaned_spectra, n_components, init='nndsvda')
 end = time()
 print(f'nmf done is {end-start:.3f}s')
-#%% 
-if Slice:
-    y_points_nb = n_z
+#%%  MAP...
+
+# Reading the values concerning the map:   
+if measure_params['MeasurementType'] == 'Map':  
+    x_index, y_index = np.where(map_params['NbSteps']>1)[0]
+    n_x, n_y = map_params['NbSteps'][[x_index, y_index]]
+    s_x, s_y = map_params['StepSizes'][map_params['StepSizes']>0]
+    print('this is a map scan')
 else:
-    y_points_nb = n_y
-mix.resize(n_x*y_points_nb,n_components, )
+    raise SystemExit('not a map scan')
+
+
+
+#if map_params['MapAreaType'] == 'Slice':
+#    y_points_nb = n_z
+#else:
+#    y_points_nb = n_y
+    
+mix.resize(n_x*n_y,n_components, )
 comp_area = np.empty(n_components)
 for z in range(n_components):
     comp_area[z] = integrate.trapz(components[z])# area beneath each component
     components[z] /= comp_area[z]# normalizing the components by area
     mix[:,z] *= comp_area[np.newaxis,z]# renormalizing the mixture coefficients
 reconstructed_spectra = np.dot(mix, components)
-novi_mix = mix.reshape(y_points_nb,n_x,n_components)
+novi_mix = mix.reshape(n_y,n_x,n_components)
+
+
 #%% Plotting the components....
+sns.set()
 fi, ax = plt.subplots(int(np.floor(np.sqrt(n_components))), int(np.ceil(n_components/np.floor(np.sqrt(n_components)))))
 if n_components > 1:
     ax = ax.ravel()
@@ -195,9 +188,10 @@ for i in range(n_components):
     ax[i].plot(sigma3, components[i].T)
     ax[i].set_title(f'Component {i}')
     ax[i].set_yticks([])
+fi.text(0.5, 0.04, f"{measure_params['XlistDataType']} recordings in {measure_params['XlistDataUnits']} units", ha='center')
 
 #%% Plotting the main plot...
-fig, ax = plt.subplots(int(np.floor(np.sqrt(n_components))), int(np.ceil(n_components/np.floor(np.sqrt(n_components)))))
+fig, ax = plt.subplots(int(np.floor(np.sqrt(n_components))), int(np.ceil(n_components/np.floor(np.sqrt(n_components)))), sharex=True, sharey=True)
 if n_components > 1:
     ax = ax.ravel()
 else:
@@ -234,16 +228,30 @@ def onclick(event):
             ff.show()
     else:
         print("you clicked outside the canvas, you bastard :)")
-
+y_ticks = [str(int(x)) for x in list(origins.iloc[:n_x*n_y:n_x,y_index+1])]
+x_ticks = [str(int(x)) for x in list(origins.iloc[:n_x, x_index+1])]
 for i in range(n_components):
     sns.heatmap(novi_mix[:,:,i], ax=ax[i], cmap="jet", annot=False)
+#    ax[i].set_aspect(s_y/s_x)
     ax[i].set_title(f'Component {i}')
+    plt.xticks(10*np.arange(np.floor(n_x/10)), x_ticks[::10], rotation=70)
+    plt.yticks(10*np.arange(np.floor(n_y/10)), y_ticks[::10])
+fig.text(0.5, 0.04, f"{origins.columns[x_index+1][1]} in {origins.columns[x_index+1][2]}", ha='center')
+fig.text(0.04, 0.5, f"{origins.columns[y_index+1][1]} in {origins.columns[y_index+1][2]}")
 fig.canvas.mpl_connect('button_press_event', onclick)
 
 
 #%%
-
-
+# =============================================================================
+# subfolder = 'Data/Hamza/'
+# components_df = pd.DataFrame(components, copy=True)
+# spectra_df = pd.DataFrame(cleaned_spectra, copy=True)
+# mix_df = pd.DataFrame(mix)
+# 
+# components_df.to_csv(subfolder+'Components.csv')
+# spectra_df.to_csv(subfolder+'Spectra.csv')
+# mix_df.to_csv(subfolder+'MixtureCoeffs.csv')
+# =============================================================================
 # =============================================================================
 # with h5py.File('test.hdf5', 'w', libver='latest') as f:
 # 
@@ -258,5 +266,3 @@ fig.canvas.mpl_connect('button_press_event', onclick)
 # 
 #     f.close()
 # =============================================================================
-    
-
