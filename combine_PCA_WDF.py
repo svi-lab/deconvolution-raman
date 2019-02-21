@@ -53,6 +53,14 @@ filename = 'Data/drop4.wdf'
 
 measure_params, map_params, sigma2, spectra, origins = read_WDF(filename)
 
+# Reading the values concerning the map:   
+if measure_params['MeasurementType'] == 'Map':  
+    x_index, y_index = np.where(map_params['NbSteps']>1)[0]
+    n_x, n_y = map_params['NbSteps'][[x_index, y_index]]
+    s_x, s_y = map_params['StepSizes'][map_params['StepSizes']>0]
+    print('this is a map scan')
+else:
+    raise SystemExit('not a map scan')
 
 
 
@@ -94,7 +102,12 @@ else:
 spektar3 = np.copy(spectra[spectra_slice])
 sigma3 = np.copy(sigma2[x_axis_slice])
 spektar3[slice_to_exclude] = np.copy(spektar3[slice_replacement])
-spektar3 = spektar3[7007:]
+
+first_lines_to_skip = 79
+last_lines_to_skip = 20
+spektar3 = spektar3[first_lines_to_skip*n_x:-last_lines_to_skip]
+
+
 if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
     
     zvrk = np.copy(spektar3.reshape(141,141,-1))
@@ -127,7 +140,7 @@ pca_fit = pca.fit(spektar3)
 #             return x_value
 # 
 # =============================================================================
-n_components = 2#choose_ncomp()
+n_components = 4#choose_ncomp()
     
 pca.n_components = n_components
 
@@ -149,25 +162,13 @@ print('starting nmf... (be patient, this may take some time...)')
 components, mix, nmf_reconstruction_error = deconvolution.nmf_step(cleaned_spectra, n_components, init='nndsvda')
 end = time()
 print(f'nmf done is {end-start:.3f}s')
-#%%  MAP...
-
-# Reading the values concerning the map:   
-if measure_params['MeasurementType'] == 'Map':  
-    x_index, y_index = np.where(map_params['NbSteps']>1)[0]
-    n_x, n_y = map_params['NbSteps'][[x_index, y_index]]
-    s_x, s_y = map_params['StepSizes'][map_params['StepSizes']>0]
-    print('this is a map scan')
-else:
-    raise SystemExit('not a map scan')
+#%%  FOR THE HEATMAP...
 
 
-
-#if map_params['MapAreaType'] == 'Slice':
-#    y_points_nb = n_z
-#else:
-#    y_points_nb = n_y
-    
+  
 mix.resize(n_x*n_y,n_components, )
+print(f"-------> eve ga mixov oblik: {mix.shape}")
+mix = np.roll(mix, first_lines_to_skip*n_x, axis=0)
 comp_area = np.empty(n_components)
 for z in range(n_components):
     comp_area[z] = integrate.trapz(components[z])# area beneath each component
@@ -176,7 +177,7 @@ for z in range(n_components):
 reconstructed_spectra = np.dot(mix, components)
 novi_mix = mix.reshape(n_y,n_x,n_components)
 
-
+print(f"-------> eve ga mixov oblik: {mix.shape}")
 #%% Plotting the components....
 sns.set()
 fi, ax = plt.subplots(int(np.floor(np.sqrt(n_components))), int(np.ceil(n_components/np.floor(np.sqrt(n_components)))))
@@ -236,8 +237,9 @@ for i in range(n_components):
     ax[i].set_title(f'Component {i}')
     plt.xticks(10*np.arange(np.floor(n_x/10)), x_ticks[::10], rotation=70)
     plt.yticks(10*np.arange(np.floor(n_y/10)), y_ticks[::10])
-fig.text(0.5, 0.04, f"{origins.columns[x_index+1][1]} in {origins.columns[x_index+1][2]}", ha='center')
-fig.text(0.04, 0.5, f"{origins.columns[y_index+1][1]} in {origins.columns[y_index+1][2]}")
+fig.text(0.5, 0.014, f"{origins.columns[x_index+1][1]} in {origins.columns[x_index+1][2]}", ha='center')
+fig.text(0.04, 0.5, f"{origins.columns[y_index+1][1]} in {origins.columns[y_index+1][2]}", rotation=90, va='center')
+fig.suptitle('Heatmaps showing the representation of each component troughout the map.')
 fig.canvas.mpl_connect('button_press_event', onclick)
 
 
