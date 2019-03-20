@@ -4,12 +4,7 @@ import numpy as np
 import os
 import time
 import pandas as pd
-#filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'
-#filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
-#filename='Data/M1ANMap_Depth_2mm_.wdf'
-#filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-101.wdf'
-#filename = 'Data/drop4.wdf'
-#filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
+
 def convert_time(t):
     '''Takes the Windows 64bit timestamp and converts it to human readable format
     All the timestamps in .WDF seem to be in this W64 format, so this function might come handy for quick transformations when needed
@@ -40,11 +35,11 @@ def read_WDF(filename):
     SCAN_TYPES = ['Unspecified','Static','Continuous','StepRepeat','FilterScan','FilterImage','StreamLine','StreamLineHR','Point','MultitrackDiscrete','LineFocusMapping']
     MAP_TYPES = {0:'RandomPoints', 1:'ColumnMajor', 2:'Alternating', 3:'LineFocusMapping', 4:'InvertedRows', 5:'InvertedColumns', 6:'SurfaceProfile', 7:'XyLine', 128:'Slice'}
     MEASUREMENT_TYPES = ['Unspecified', 'Single', 'Series', 'Map']
-    WDF_FLAGS = ['WdfXYXY','WdfChecksum','WdfCosmicRayRemoval','WdfMultitrack','WdfSaturation','WdfFileBackup','WdfTemporary','WdfSlice','WdfPQ']
+    WDF_FLAGS = {0:'WdfXYXY',1:'WdfChecksum',2:'WdfCosmicRayRemoval',3:'WdfMultitrack',4:'WdfSaturation',5:'WdfFileBackup',6:'WdfTemporary',7:'WdfSlice',8:'WdfPQ', 16:'UnknownFlag (check in WiRE?)'}
 
     try:
         f = open(filename, "rb")
-        print(f'Reading the file: \n{filename}\n')
+        print(f'Reading the file: "{filename}"\n')
     except IOError:
         raise IOError(f"File {filename} does noe exist!")
     filesize = os.path.getsize(filename)
@@ -81,6 +76,7 @@ def read_WDF(filename):
     for i in gen:
         print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}")
         f.seek(b_off[i]+16)
+#        TEST_WDF_FLAG = _read(f,np.uint64)
         params['WdfFlag'] = WDF_FLAGS[_read(f,np.uint64)]
         f.seek(60)
         params['PointsPerSpectrum'] = npoints = _read(f)
@@ -100,10 +96,10 @@ def read_WDF(filename):
         params['LaserWaveLength'] = np.round(10e6/_read(f, '<f'),2)
         f.seek(240)
         params['Title'] = _read(f,'|S160').decode()
-    if nspectra != ncollected:
-        print(f'\nATTENTION:\nNot all spectra were recorded\nnspectra={nspectra}, while ncollected={ncollected}\nThe {nspectra-ncollected} missing values will still be missing\n')#be filled with zeros.\n')
     for key, val in params.items():
-        print(f'{key} : \t{val}')
+        print(f'{key:-<30s} : \t{val}')
+    if nspectra != ncollected:
+        print(f'\nATTENTION:\nNot all spectra were recorded\nnspectra={nspectra}, while ncollected={ncollected}\nThe {nspectra-ncollected} missing values will be shown as blanks\n')#be filled with zeros.\n')
     
     
     
@@ -121,7 +117,7 @@ def read_WDF(filename):
         map_params['NbSteps'] = n_x,n_y,n_z = _read(f, np.uint32, count=3)
         map_params['LineFocusSize'] = _read(f)
     for key, val in map_params.items():
-        print(f'{key} : \t{val}')
+        print(f'{key:-<30s} : \t{val}')
      
     
     
@@ -133,12 +129,14 @@ def read_WDF(filename):
         print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}")
         f.seek(b_off[i]+16)
         spectra = _read(f,'<f', count=data_points_count).reshape(ncollected, npoints)
+        print(f'The number of spectra------------------ : \t{spectra.shape[0]}')
+        print(f'The number of points in each spectra--- : \t{spectra.shape[1]}')
+        
         if map_params['MapAreaType'] == 'InvertedRows':
             spectra = [spectra[((xx//n_x)+1)*n_x-(xx%n_x)-1] if (xx//n_x)%2==1 else spectra[xx] for xx in range(nspectra)]
             spectra = np.asarray(spectra)
-            print('It seems your file was recorded using the "Inverted Rows" scan type (sometimes reffered to as "Snake"),\n' 
-              'Note that the spectra is shifted so to be stored the same way as other scan types (from left to right, and from top to bottom)')
-        print(f'the shape of the spectra is: {spectra.shape}')
+            print('\n*It seems your file was recorded using the "Inverted Rows" scan type (sometimes reffered to as "Snake"). ' 
+              'Note that the spectra will be rearanged so it could be read the same way as other scan types (from left to right, and from top to bottom)')
         
         
     
@@ -150,8 +148,8 @@ def read_WDF(filename):
         params['XlistDataType'] = DATA_TYPES[_read(f)]
         params['XlistDataUnits'] = DATA_UNITS[_read(f)]
         x_values = _read(f,'<f', count=npoints)
-    print(f"The shape of the x_values is : {x_values.shape}")
-    print(f"These are the {params['XlistDataType']} recordings in {params['XlistDataUnits']} units")
+    print(f"The shape of the x_values is-- : \t{x_values.shape}")
+    print(f"\n*These are the \"{params['XlistDataType']}\" recordings in \"{params['XlistDataUnits']}\" units")
 
         
     name = 'YLST' # This is where the image is stored (if recorded). When y_values_count > 1, there should be an image.
@@ -165,7 +163,7 @@ def read_WDF(filename):
         if y_values_count > 1:
             print("There seem to be the image recorded as well")
             y_values = _read(f,'<f', count=y_values_count)
-            print(f"Its size is {y_values.shape}")
+            print(f"Its size is----- : \t{y_values.shape}")
         else:
             print("No image was recorded")
     

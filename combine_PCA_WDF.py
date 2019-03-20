@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
-from wdfReader_new import convert_time, read_WDF
+from read_WDF import convert_time, read_WDF
 import deconvolution
 import matplotlib.pyplot as plt
+from matplotlib.cm import ScalarMappable
+from matplotlib import colors
 from sklearn import decomposition
 from scipy import integrate
 #import h5py
@@ -40,7 +42,7 @@ it will pop-up another plot with the spectra recorded at this point, together wi
     
 '''
 # -----------------------Choose a file--------------------------------------------
-#filename = 'Data/Test-Na-SiO2 0079 -532nm-obj100-p100-10s over night carto.wdf'#scan_type 1, measurement_type 3
+#filename = 'Data/Test-Na-SiO2 0079 -532nm-obj100-p100-10s over night carto.wdf'
 #filename = 'Data/Test-Na-SiO2 0079 droplet on quartz -532nm-obj50-p50-15s over night_Copy_Copy.wdf'#scan_type 2, measurement_type 2
 #filename = 'Data/Test quartz substrate -532nm-obj100-p100-10s.wdf'#scan_type 2, measurement_type 1
 #filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'#scan_type 2 (wtf?), measurement_type 3
@@ -50,14 +52,16 @@ it will pop-up another plot with the spectra recorded at this point, together wi
 filename = 'Data/drop4.wdf'
 #filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
 
-
 measure_params, map_params, sigma2, spectra, origins = read_WDF(filename)
 
 # Reading the values concerning the map:   
-if measure_params['MeasurementType'] == 'Map':  
+if measure_params['MeasurementType'] == 'Map':
+    # Below we find indices of the axes in our map:
     x_index, y_index = np.where(map_params['NbSteps']>1)[0]
+    # Thus you get the x-axis as the first one in the measurement map having more than 1 step recorded;
+    # the other one is named y for the script purposes, even though it might be the depth in reality.
     n_x, n_y = map_params['NbSteps'][[x_index, y_index]]
-    s_x, s_y = map_params['StepSizes'][map_params['StepSizes']>0]
+    s_x, s_y = map_params['StepSizes'][[x_index, y_index]]
     print('this is a map scan')
 else:
     raise SystemExit('not a map scan')
@@ -67,20 +71,28 @@ else:
 #%% SLICING....
 
 # one should always check if the spectra were recorded with the dead pixels included or not
-# It turns out that firs 10 and the last 16 pixels on the Renishaw SVI spectrometer detector are reserved, 
+# It turns out that the first 10 and the last 16 pixels on the Renishaw SVI spectrometer detector are reserved, 
 # and no signal is recorded on those pixels by the detector. So we should either enter these parameters inside the Wire settings
 # or if it's not done, remove those pixels here manually
 # Furthermore, we sometimes want to perform the deconvolution only on a part of the spectra, so here you define the part that interests you
-slice_values = (920,1120)# give your zone in cm-1
-
+slice_values = (850,1250)# give your zone in cm-1
 _coupe_bas = np.where(sigma2 == min(sigma2, key=lambda v: abs(slice_values[0]-v)))[0][0]
 _coupe_haut = np.where(sigma2 == min(sigma2, key=lambda v: abs(slice_values[1]-v)))[0][0]
 #x_axis_slice = slice(coupe_haut,coupe_bas)
-x_axis_slice = slice(_coupe_haut,_coupe_bas) # you need to remember the order of the shifts is recorded from higher to lower
-spectra_slice = np.index_exp[:,x_axis_slice] # Nothing to see here, move along
+x_axis_slice = slice(_coupe_haut,_coupe_bas) # You need to remember the order of the Raman shifts is recorded from higher to lower
+spectra_slice = np.index_exp[:,x_axis_slice] # Cutting all spectra to the given range 
+
+spektar3 = np.copy(spectra[spectra_slice])
+sigma3 = np.copy(sigma2[x_axis_slice])
+
+first_lines_to_skip = None
+last_lines_to_skip = None
 
 # Next few lines serve to isolate case-to-case file-specific problems in map scans:
 if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
+    map_view = np.copy(spektar3.reshape(141,141,-1))
+    map_view[107:137,131:141,:] = map_view[107:137,100:110,:] # patching the hole in the sample
+    spektar3 = map_view.reshape(141**2,-1)
     slice_to_exclude = slice(5217,5499)
     slice_replacement = slice(4935,5217)
 elif filename == 'Data/M1ANMap_Depth_2mm_.wdf': #Removing a few cosmic rays
@@ -89,7 +101,8 @@ elif filename == 'Data/M1ANMap_Depth_2mm_.wdf': #Removing a few cosmic rays
 elif filename == 'Data/drop4.wdf': #Removing a few cosmic rays manually
     slice_to_exclude = np.index_exp[[16021, 5554, 447, 14650, 16261, 12463, 14833, 13912, 5392, 11073, 16600, 20682, 2282, 18162, 20150, 12473, 4293, 16964, 19400]]
     slice_replacement = np.index_exp[[16020, 5555, 446, 14649, 16262, 12462, 14834, 13911, 5391, 11072,16601, 20683, 2283, 18163, 20151, 12474, 4294, 16965, 19401]]
-    
+    first_lines_to_skip = 79
+    last_lines_to_skip = 20
 elif filename == 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf': #Removing a few cosmic rays
     slice_to_exclude = np.index_exp[[1717, 11809, 2254, 3220, 6833]]
     slice_replacement = np.index_exp[[1718, 11808, 2255, 3221, 6832]]
@@ -99,22 +112,30 @@ else:
 
 
 
-spektar3 = np.copy(spectra[spectra_slice])
-sigma3 = np.copy(sigma2[x_axis_slice])
 spektar3[slice_to_exclude] = np.copy(spektar3[slice_replacement])
 
-first_lines_to_skip = 79
-last_lines_to_skip = 20
-spektar3 = spektar3[first_lines_to_skip*n_x:-last_lines_to_skip]
+if not first_lines_to_skip:
+    start_pos = 0
+else:
+    start_pos = first_lines_to_skip*n_x
+if not last_lines_to_skip:
+    end_pos = None
+else:
+    end_pos = -last_lines_to_skip*n_x
 
+spektar3 = spektar3[start_pos:end_pos]
 
-if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
-    
-    zvrk = np.copy(spektar3.reshape(141,141,-1))
-    zvrk[107:137,131:141,:] = zvrk[107:137,100:110,:] # patching the hole in the sample
-    spektar3 = zvrk.reshape(141**2,-1)
+   
+
 #%% PCA...
-
+try:
+    spektar3
+except NameError:
+    spektar3 = np.copy(spectra)
+try:
+    sigma3
+except NameError:
+    sigma3 = np.copy(sigma2)
 
 pca = decomposition.PCA()
 pca_fit = pca.fit(spektar3)
@@ -140,7 +161,7 @@ pca_fit = pca.fit(spektar3)
 #             return x_value
 # 
 # =============================================================================
-n_components = 4#choose_ncomp()
+n_components = 6#choose_ncomp()
     
 pca.n_components = n_components
 
@@ -168,7 +189,7 @@ print(f'nmf done is {end-start:.3f}s')
   
 mix.resize(n_x*n_y,n_components, )
 print(f"-------> eve ga mixov oblik: {mix.shape}")
-mix = np.roll(mix, first_lines_to_skip*n_x, axis=0)
+mix = np.roll(mix, start_pos, axis=0)
 comp_area = np.empty(n_components)
 for z in range(n_components):
     comp_area[z] = integrate.trapz(components[z])# area beneath each component
@@ -180,13 +201,16 @@ novi_mix = mix.reshape(n_y,n_x,n_components)
 print(f"-------> eve ga mixov oblik: {mix.shape}")
 #%% Plotting the components....
 sns.set()
+col_norm = colors.Normalize(vmin=0, vmax=n_components)
+color_set = ScalarMappable(norm=col_norm, cmap="brg")
+
 fi, ax = plt.subplots(int(np.floor(np.sqrt(n_components))), int(np.ceil(n_components/np.floor(np.sqrt(n_components)))))
 if n_components > 1:
     ax = ax.ravel()
 else:
     ax = [ax]
 for i in range(n_components):
-    ax[i].plot(sigma3, components[i].T)
+    ax[i].plot(sigma3, components[i].T, color=color_set.to_rgba(i))
     ax[i].set_title(f'Component {i}')
     ax[i].set_yticks([])
 fi.text(0.5, 0.04, f"{measure_params['XlistDataType']} recordings in {measure_params['XlistDataUnits']} units", ha='center')
@@ -209,37 +233,36 @@ def onclick(event):
         x_pos = int(np.floor(event.xdata))
         y_pos = int(np.floor(event.ydata))
 
-#        line_px = n_y
-        line_px=n_x # penser à changer pour slice
-        broj = int(y_pos * line_px + x_pos)
+        broj = int(y_pos*n_x + x_pos)
+        spec_num = int(y_pos*n_x - start_pos + x_pos)
 
         if event.dblclick:
             ff,aa = plt.subplots()
-            aa.scatter(sigma3, cleaned_spectra[broj], alpha=0.3, label=f'(cleaned) spectrum n°{broj}')
+            aa.scatter(sigma3, cleaned_spectra[spec_num], alpha=0.3, label=f'(cleaned) spectrum n°{broj}')
             aa.plot(sigma3, reconstructed_spectra[broj], '--k', label='reconstructed spectrum')
             for k in range(n_components):
-                aa.plot(sigma3, components[k]*mix[broj][k], label=f'Component {k} contribution ({mix[broj][k]*100:.1f}%)')
+                aa.plot(sigma3, components[k]*mix[broj][k], color=color_set.to_rgba(k), label=f'Component {k} contribution ({mix[broj][k]*100:.1f}%)')
             
 #this next part is to reorganize the order of labels, so to put the scatter plot first
             handles, labels = aa.get_legend_handles_labels()
             order = list(np.arange(n_components+2))
             new_order = [order[-1]]+order[:-1]
             aa.legend([handles[idx] for idx in new_order],[labels[idx] for idx in new_order])
-            aa.set_title(f'spectra from {y_pos}th line and {x_pos}th column')
+            aa.set_title(f'deconvolution of the spectrum from {y_pos}th line and {x_pos}th column')
             ff.show()
     else:
         print("you clicked outside the canvas, you bastard :)")
-y_ticks = [str(int(x)) for x in list(origins.iloc[:n_x*n_y:n_x,y_index+1])]
-x_ticks = [str(int(x)) for x in list(origins.iloc[:n_x, x_index+1])]
+y_ticks = [str(int(x)) for x in list(origins.iloc[:n_x*n_y:n_x,y_index])]
+x_ticks = [str(int(x)) for x in list(origins.iloc[:n_x, x_index])]
 for i in range(n_components):
     sns.heatmap(novi_mix[:,:,i], ax=ax[i], cmap="jet", annot=False)
 #    ax[i].set_aspect(s_y/s_x)
-    ax[i].set_title(f'Component {i}')
-    plt.xticks(10*np.arange(np.floor(n_x/10)), x_ticks[::10], rotation=70)
+    ax[i].set_title(f'Component {i}', color=color_set.to_rgba(i), fontweight='extra bold')
+    plt.xticks(10*np.arange(np.floor(n_x/10)), x_ticks[::10])
     plt.yticks(10*np.arange(np.floor(n_y/10)), y_ticks[::10])
-fig.text(0.5, 0.014, f"{origins.columns[x_index+1][1]} in {origins.columns[x_index+1][2]}", ha='center')
-fig.text(0.04, 0.5, f"{origins.columns[y_index+1][1]} in {origins.columns[y_index+1][2]}", rotation=90, va='center')
-fig.suptitle('Heatmaps showing the representation of each component troughout the map.')
+fig.text(0.5, 0.014, f"{origins.columns[x_index][1]} in {origins.columns[x_index][2]}", ha='center')
+fig.text(0.04, 0.5, f"{origins.columns[y_index][1]} in {origins.columns[y_index][2]}", rotation=90, va='center')
+fig.suptitle('Heatmaps showing the representation of each component throughout the map.')
 fig.canvas.mpl_connect('button_press_event', onclick)
 
 
