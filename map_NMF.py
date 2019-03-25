@@ -4,6 +4,7 @@ import deconvolution
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib import colors
+from matplotlib.widgets import Button
 from sklearn import decomposition
 from scipy import integrate
 #import h5py
@@ -65,7 +66,144 @@ if measure_params['MeasurementType'] == 'Map':
     print('this is a map scan')
 else:
     raise SystemExit('not a map scan')
+#%% showing the raw spectra:
 
+plt.close('all')
+fig, ax = plt.subplots()
+plt.subplots_adjust(bottom=0.2)
+
+s = np.copy(spectra)
+n_points = int(measure_params['Capacity'])
+s.resize(n_points, int(measure_params['PointsPerSpectrum']))
+l, = plt.plot(sigma2, s[0], lw=2)
+plt.show()
+class Index(object):
+    ind = 0
+
+    def next(self, event):
+        self.ind += 1
+        i = self.ind % n_points
+        ydata = s[i]
+        l.set_ydata(ydata)
+        ax.relim()
+        ax.autoscale_view(None, False, True)
+        ax.set_title(f'spectrum number {i}')
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        
+    def next10(self, event):
+        self.ind += 10
+        i = self.ind % n_points
+        ydata = s[i]
+        l.set_ydata(ydata)
+        ax.relim()
+        ax.autoscale_view(None, False, True)
+        ax.set_title(f'spectrum number {i}')
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+               
+    def next100(self, event):
+        self.ind += 100
+        i = self.ind % n_points
+        ydata = s[i]
+        l.set_ydata(ydata)
+        ax.relim()
+        ax.autoscale_view(None, False, True)
+        ax.set_title(f'spectrum number {i}')
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        
+    def next1000(self, event):
+        self.ind += 1000
+        i = self.ind % n_points
+        ydata = s[i]		
+        l.set_ydata(ydata)
+        ax.relim()
+        ax.autoscale_view(None, False, True)
+        ax.set_title(f'spectrum number {i}')
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        
+
+    def prev(self, event):
+        self.ind -= 1
+        i = self.ind % n_points
+        ydata = s[i]		
+        l.set_ydata(ydata)
+        ax.relim()
+        ax.autoscale_view(None, False, True)
+        ax.set_title(f'spectrum number {i}')
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        
+        
+    def prev10(self, event):
+        self.ind -= 10
+        i = self.ind % n_points
+        ydata = s[i]
+        l.set_ydata(ydata)
+        ax.relim()
+        ax.autoscale_view(None, False, True)
+        ax.set_title(f'spectrum number {i}')
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        
+        
+    def prev100(self, event):
+        self.ind -= 100
+        i = self.ind % n_points
+        ydata = s[i]
+        l.set_ydata(ydata)
+        ax.relim()
+        ax.autoscale_view(None, False, True)
+        ax.set_title(f'spectrum number {i}')
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        
+        
+    def prev1000(self, event):
+        self.ind -= 1000
+        i = (self.ind) % n_points
+        print(i)
+        ydata = s[i]
+        l.set_ydata(ydata)
+        ax.relim()
+        ax.autoscale_view(None, False, True)
+        ax.set_title(f'spectrum number {i}')
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        
+        
+
+callback = Index()
+
+axprev1000 = plt.axes([0.097, 0.05, 0.1, 0.04])
+axprev100 = plt.axes([0.198, 0.05, 0.1, 0.04])
+axprev10 = plt.axes([0.299, 0.05, 0.1, 0.04])
+axprev1 = plt.axes([0.4, 0.05, 0.1, 0.04])
+axnext1 = plt.axes([0.501, 0.05, 0.1, 0.04])
+axnext10 = plt.axes([0.602, 0.05, 0.1, 0.04])
+axnext100 = plt.axes([0.703, 0.05, 0.1, 0.04])
+axnext1000 = plt.axes([0.804, 0.05, 0.1, 0.04])
+
+
+
+bprev1000 = Button(axprev1000, 'Prev.1000')
+bprev1000.on_clicked(callback.prev1000)
+bprev100 = Button(axprev100, 'Prev.100')
+bprev100.on_clicked(callback.prev100)
+bprev10 = Button(axprev10, 'Prev.10')
+bprev10.on_clicked(callback.prev10)
+bprev = Button(axprev1, 'Prev.1')
+bprev.on_clicked(callback.prev)
+bnext = Button(axnext1, 'Next1')
+bnext.on_clicked(callback.next)
+bnext10 = Button(axnext10, 'Next10')
+bnext10.on_clicked(callback.next10)
+bnext100 = Button(axnext100, 'Next100')
+bnext100.on_clicked(callback.next100)
+bnext1000 = Button(axnext1000, 'Next1000')
+bnext1000.on_clicked(callback.next1000)
 
 
 #%% SLICING....
@@ -75,15 +213,22 @@ else:
 # and no signal is recorded on those pixels by the detector. So we should either enter these parameters inside the Wire settings
 # or if it's not done, remove those pixels here manually
 # Furthermore, we sometimes want to perform the deconvolution only on a part of the spectra, so here you define the part that interests you
-slice_values = (850,1250)# give your zone in cm-1
-_coupe_bas = np.where(sigma2 == min(sigma2, key=lambda v: abs(slice_values[0]-v)))[0][0]
-_coupe_haut = np.where(sigma2 == min(sigma2, key=lambda v: abs(slice_values[1]-v)))[0][0]
-#x_axis_slice = slice(coupe_haut,coupe_bas)
-x_axis_slice = slice(_coupe_haut,_coupe_bas) # You need to remember the order of the Raman shifts is recorded from higher to lower
-spectra_slice = np.index_exp[:,x_axis_slice] # Cutting all spectra to the given range 
+slice_values = (485,1600)# give your zone in cm-1
+#_coupe_bas = np.where(sigma2 == min(sigma2, key=lambda v: abs(slice_values[0]-v)))[0][0]
+#_coupe_haut = np.where(sigma2 == min(sigma2, key=lambda v: abs(slice_values[1]-v)))[0][0]
+##x_axis_slice = slice(coupe_haut,coupe_bas)
+#x_axis_slice = slice(_coupe_haut,_coupe_bas) # You need to remember the order of the Raman shifts is recorded from higher to lower
+#spectra_slice = np.index_exp[:,x_axis_slice] # Cutting all spectra to the given range 
+#
+#spektar3 = np.copy(spectra[spectra_slice])
+#sigma3 = np.copy(sigma2[x_axis_slice])
+# The whole mumbo-jumbo of the previous 6 lines could also be achieved much simpler with :
+condition = (sigma2 > slice_values[0]) & (sigma2 < slice_values[1])
+sigma3 = np.copy(sigma2[condition]) # adding np.copy if needed
+spektar3 = np.copy(spectra[:, condition])
 
-spektar3 = np.copy(spectra[spectra_slice])
-sigma3 = np.copy(sigma2[x_axis_slice])
+
+
 
 first_lines_to_skip = None
 last_lines_to_skip = None
@@ -161,7 +306,7 @@ pca_fit = pca.fit(spektar3)
 #             return x_value
 # 
 # =============================================================================
-n_components = 6#choose_ncomp()
+n_components = 4#choose_ncomp()
     
 pca.n_components = n_components
 
