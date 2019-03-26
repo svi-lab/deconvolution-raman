@@ -50,8 +50,8 @@ it will pop-up another plot with the spectra recorded at this point, together wi
 #filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
 #filename = 'Data/M1ANMap_Depth_2mm_.wdf'
 #filename = 'Data/M1SCMap_depth_.wdf'
-filename = 'Data/drop4.wdf'
-#filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
+#filename = 'Data/drop4.wdf'
+filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
 
 measure_params, map_params, sigma2, spectra, origins = read_WDF(filename)
 
@@ -66,13 +66,43 @@ if measure_params['MeasurementType'] == 'Map':
     print('this is a map scan')
 else:
     raise SystemExit('not a map scan')
+    
+    
+#%% Cosmic Rays:
+spectra1 = np.copy(spectra)
+# Next few lines serve to isolate case-to-case file-specific problems in map scans:
+if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
+    map_view = spectra1.reshape(141,141,-1)
+    map_view[107:137,131:141,:] = map_view[107:137,100:110,:] # patching the hole in the sample
+    spectra1 = map_view.reshape(141**2,-1)
+    slice_to_exclude = slice(5217,5499)
+    slice_replacement = slice(4935,5217)
+elif filename == 'Data/M1ANMap_Depth_2mm_.wdf': #Removing a few cosmic rays
+    slice_to_exclude = np.index_exp[[10411, 10277, 17583]]
+    slice_replacement = np.index_exp[[10412, 10278, 17584]]
+elif filename == 'Data/drop4.wdf': #Removing a few cosmic rays manually
+    slice_to_exclude = np.index_exp[[16021, 5554, 447, 14650, 16261, 12463, 14833, 13912, 5392, 11073, 16600, 20682, 2282, 18162, 20150, 12473, 4293, 16964, 19400]]
+    slice_replacement = np.index_exp[[16020, 5555, 446, 14649, 16262, 12462, 14834, 13911, 5391, 11072,16601, 20683, 2283, 18163, 20151, 12474, 4294, 16965, 19401]]
+    first_lines_to_skip = 79
+    last_lines_to_skip = 20
+elif filename == 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf': #Removing a few cosmic rays
+    slice_to_exclude = np.index_exp[[326, 700, 702, 1019, 1591, 1717, 2254, 3220, 3668, 3939, 5521, 6833, 6967, 7335, 7864, 10538, 10572, 11809]]
+    slice_replacement = np.index_exp[[327, 701, 703, 1020, 1592, 1718, 2255, 3221, 3669, 3940, 5522, 6832, 6968, 7336, 7865, 10539, 10573, 11808]]
+else:
+    slice_to_exclude = slice(None)
+    slice_replacement = slice(None)
+
+
+
+spectra1[slice_to_exclude] = np.copy(spectra[slice_replacement])
+
 #%% showing the raw spectra:
 
-plt.close('all')
-fig, ax = plt.subplots()
+#plt.close('all')
+figr, axr = plt.subplots()
 plt.subplots_adjust(bottom=0.2)
 
-s = np.copy(spectra)
+s = np.copy(spectra1)
 n_points = int(measure_params['Capacity'])
 s.resize(n_points, int(measure_params['PointsPerSpectrum']))
 l, = plt.plot(sigma2, s[0], lw=2)
@@ -85,44 +115,44 @@ class Index(object):
         i = self.ind % n_points
         ydata = s[i]
         l.set_ydata(ydata)
-        ax.relim()
-        ax.autoscale_view(None, False, True)
-        ax.set_title(f'spectrum number {i}')
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
         
     def next10(self, event):
         self.ind += 10
         i = self.ind % n_points
         ydata = s[i]
         l.set_ydata(ydata)
-        ax.relim()
-        ax.autoscale_view(None, False, True)
-        ax.set_title(f'spectrum number {i}')
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
                
     def next100(self, event):
         self.ind += 100
         i = self.ind % n_points
         ydata = s[i]
         l.set_ydata(ydata)
-        ax.relim()
-        ax.autoscale_view(None, False, True)
-        ax.set_title(f'spectrum number {i}')
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
         
     def next1000(self, event):
         self.ind += 1000
         i = self.ind % n_points
         ydata = s[i]		
         l.set_ydata(ydata)
-        ax.relim()
-        ax.autoscale_view(None, False, True)
-        ax.set_title(f'spectrum number {i}')
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
         
 
     def prev(self, event):
@@ -130,11 +160,11 @@ class Index(object):
         i = self.ind % n_points
         ydata = s[i]		
         l.set_ydata(ydata)
-        ax.relim()
-        ax.autoscale_view(None, False, True)
-        ax.set_title(f'spectrum number {i}')
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
         
         
     def prev10(self, event):
@@ -142,11 +172,11 @@ class Index(object):
         i = self.ind % n_points
         ydata = s[i]
         l.set_ydata(ydata)
-        ax.relim()
-        ax.autoscale_view(None, False, True)
-        ax.set_title(f'spectrum number {i}')
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
         
         
     def prev100(self, event):
@@ -154,24 +184,23 @@ class Index(object):
         i = self.ind % n_points
         ydata = s[i]
         l.set_ydata(ydata)
-        ax.relim()
-        ax.autoscale_view(None, False, True)
-        ax.set_title(f'spectrum number {i}')
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
         
         
     def prev1000(self, event):
         self.ind -= 1000
         i = (self.ind) % n_points
-        print(i)
         ydata = s[i]
         l.set_ydata(ydata)
-        ax.relim()
-        ax.autoscale_view(None, False, True)
-        ax.set_title(f'spectrum number {i}')
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
         
         
 
@@ -213,7 +242,7 @@ bnext1000.on_clicked(callback.next1000)
 # and no signal is recorded on those pixels by the detector. So we should either enter these parameters inside the Wire settings
 # or if it's not done, remove those pixels here manually
 # Furthermore, we sometimes want to perform the deconvolution only on a part of the spectra, so here you define the part that interests you
-slice_values = (485,1600)# give your zone in cm-1
+slice_values = (90,1350)# give your zone in cm-1
 #_coupe_bas = np.where(sigma2 == min(sigma2, key=lambda v: abs(slice_values[0]-v)))[0][0]
 #_coupe_haut = np.where(sigma2 == min(sigma2, key=lambda v: abs(slice_values[1]-v)))[0][0]
 ##x_axis_slice = slice(coupe_haut,coupe_bas)
@@ -225,39 +254,14 @@ slice_values = (485,1600)# give your zone in cm-1
 # The whole mumbo-jumbo of the previous 6 lines could also be achieved much simpler with :
 condition = (sigma2 > slice_values[0]) & (sigma2 < slice_values[1])
 sigma3 = np.copy(sigma2[condition]) # adding np.copy if needed
-spektar3 = np.copy(spectra[:, condition])
+spektar3 = np.copy(spectra1[:, condition])
 
 
 
 
-first_lines_to_skip = None
-last_lines_to_skip = None
+first_lines_to_skip = None # Put None if not
+last_lines_to_skip = 91
 
-# Next few lines serve to isolate case-to-case file-specific problems in map scans:
-if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
-    map_view = np.copy(spektar3.reshape(141,141,-1))
-    map_view[107:137,131:141,:] = map_view[107:137,100:110,:] # patching the hole in the sample
-    spektar3 = map_view.reshape(141**2,-1)
-    slice_to_exclude = slice(5217,5499)
-    slice_replacement = slice(4935,5217)
-elif filename == 'Data/M1ANMap_Depth_2mm_.wdf': #Removing a few cosmic rays
-    slice_to_exclude = np.index_exp[[10411, 10277, 17583]]
-    slice_replacement = np.index_exp[[10412, 10278, 17584]]
-elif filename == 'Data/drop4.wdf': #Removing a few cosmic rays manually
-    slice_to_exclude = np.index_exp[[16021, 5554, 447, 14650, 16261, 12463, 14833, 13912, 5392, 11073, 16600, 20682, 2282, 18162, 20150, 12473, 4293, 16964, 19400]]
-    slice_replacement = np.index_exp[[16020, 5555, 446, 14649, 16262, 12462, 14834, 13911, 5391, 11072,16601, 20683, 2283, 18163, 20151, 12474, 4294, 16965, 19401]]
-    first_lines_to_skip = 79
-    last_lines_to_skip = 20
-elif filename == 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf': #Removing a few cosmic rays
-    slice_to_exclude = np.index_exp[[1717, 11809, 2254, 3220, 6833]]
-    slice_replacement = np.index_exp[[1718, 11808, 2255, 3221, 6832]]
-else:
-    slice_to_exclude = slice(None)
-    slice_replacement = slice(None)
-
-
-
-spektar3[slice_to_exclude] = np.copy(spektar3[slice_replacement])
 
 if not first_lines_to_skip:
     start_pos = 0
@@ -270,7 +274,7 @@ else:
 
 spektar3 = spektar3[start_pos:end_pos]
 
-   
+coordinates = origins.iloc[start_pos:end_pos,[x_index+1, y_index+1]]   
 
 #%% PCA...
 try:
@@ -306,9 +310,9 @@ pca_fit = pca.fit(spektar3)
 #             return x_value
 # 
 # =============================================================================
-n_components = 4#choose_ncomp()
+n_components = 3#choose_ncomp()
     
-pca.n_components = n_components
+pca.n_components = 10#n_components
 
 
 denoised_spectra = pca.fit_transform(spektar3)
@@ -326,6 +330,7 @@ cleaned_spectra = deconvolution.clean(sigma3, denoised_spectra, mode='area')
 start = time()
 print('starting nmf... (be patient, this may take some time...)')
 components, mix, nmf_reconstruction_error = deconvolution.nmf_step(cleaned_spectra, n_components, init='nndsvda')
+basic_mix = pd.DataFrame(np.copy(mix), columns = [f"mixing coeff. for the component {l}" for l in np.arange(mix.shape[1])])
 end = time()
 print(f'nmf done is {end-start:.3f}s')
 #%%  FOR THE HEATMAP...
@@ -346,6 +351,7 @@ novi_mix = mix.reshape(n_y,n_x,n_components)
 print(f"-------> eve ga mixov oblik: {mix.shape}")
 #%% Plotting the components....
 sns.set()
+
 col_norm = colors.Normalize(vmin=0, vmax=n_components)
 color_set = ScalarMappable(norm=col_norm, cmap="brg")
 
@@ -436,3 +442,8 @@ fig.canvas.mpl_connect('button_press_event', onclick)
 # 
 #     f.close()
 # =============================================================================
+save_filename_extension = f"_{n_components}components_RSfrom{slice_values[0]}to{slice_values[1]}_fromLine{first_lines_to_skip}to{n_y-last_lines_to_skip}.csv"
+save_coeff = pd.concat([coordinates, basic_mix], axis=1)
+save_coeff.to_csv(f"{filename[:-4]}_MixingCoeffs_{n_components}components_RSfrom{slice_values[0]}to{slice_values[1]}_fromLine{first_lines_to_skip}to{n_y-last_lines_to_skip}.csv")
+save_components = pd.DataFrame(components, columns=[f"Component{i}" for i in np.arange(n_components)])
+save_components.to_csv(f"{filename[:-4]}_Components{save_filename_extension}")
