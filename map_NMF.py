@@ -86,8 +86,8 @@ elif filename == 'Data/drop4.wdf': #Removing a few cosmic rays manually
     first_lines_to_skip = 79
     last_lines_to_skip = 20
 elif filename == 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf': #Removing a few cosmic rays
-    slice_to_exclude = np.index_exp[[326, 700, 702, 1019, 1591, 1717, 2254, 3220, 3668, 3939, 5521, 6833, 6967, 7335, 7864, 10538, 10572, 11809]]
-    slice_replacement = np.index_exp[[327, 701, 703, 1020, 1592, 1718, 2255, 3221, 3669, 3940, 5522, 6832, 6968, 7336, 7865, 10539, 10573, 11808]]
+    slice_to_exclude = np.index_exp[[326, 700, 702, 1019, 1591, 1717, 2254, 3220, 3668, 3939, 5521, 6358, 6833, 6967, 7335, 7864, 10538, 10572, 11809]]
+    slice_replacement = np.index_exp[[327, 701, 703, 1020, 1592, 1718, 2255, 3221, 3669, 3940, 5522, 6359, 6832, 6968, 7336, 7865, 10539, 10573, 11808]]
 else:
     slice_to_exclude = slice(None)
     slice_replacement = slice(None)
@@ -260,7 +260,7 @@ spektar3 = np.copy(spectra1[:, condition])
 
 
 first_lines_to_skip = None # Put None if not
-last_lines_to_skip = 91
+last_lines_to_skip = None
 
 
 if not first_lines_to_skip:
@@ -403,16 +403,16 @@ def onclick(event):
             ff.show()
     else:
         print("you clicked outside the canvas, you bastard :)")
-y_ticks = [str(int(x)) for x in list(origins.iloc[:n_x*n_y:n_x,y_index])]
-x_ticks = [str(int(x)) for x in list(origins.iloc[:n_x, x_index])]
+y_ticks = [str(int(x)) for x in list(origins.iloc[:n_x*n_y:n_x,y_index+1])]
+x_ticks = [str(int(x)) for x in list(origins.iloc[:n_x, x_index+1])]
 for i in range(n_components):
     sns.heatmap(novi_mix[:,:,i], ax=ax[i], cmap="jet", annot=False)
 #    ax[i].set_aspect(s_y/s_x)
     ax[i].set_title(f'Component {i}', color=color_set.to_rgba(i), fontweight='extra bold')
     plt.xticks(10*np.arange(np.floor(n_x/10)), x_ticks[::10])
     plt.yticks(10*np.arange(np.floor(n_y/10)), y_ticks[::10])
-fig.text(0.5, 0.014, f"{origins.columns[x_index][1]} in {origins.columns[x_index][2]}", ha='center')
-fig.text(0.04, 0.5, f"{origins.columns[y_index][1]} in {origins.columns[y_index][2]}", rotation=90, va='center')
+fig.text(0.5, 0.014, f"{origins.columns[x_index+1][1]} in {origins.columns[x_index+1][2]}", ha='center')
+fig.text(0.04, 0.5, f"{origins.columns[y_index+1][1]} in {origins.columns[y_index+1][2]}", rotation=90, va='center')
 fig.suptitle('Heatmaps showing the representation of each component throughout the map.')
 fig.canvas.mpl_connect('button_press_event', onclick)
 
@@ -445,5 +445,5 @@ fig.canvas.mpl_connect('button_press_event', onclick)
 save_filename_extension = f"_{n_components}components_RSfrom{slice_values[0]}to{slice_values[1]}_fromLine{first_lines_to_skip}to{n_y-last_lines_to_skip}.csv"
 save_coeff = pd.concat([coordinates, basic_mix], axis=1)
 save_coeff.to_csv(f"{filename[:-4]}_MixingCoeffs_{n_components}components_RSfrom{slice_values[0]}to{slice_values[1]}_fromLine{first_lines_to_skip}to{n_y-last_lines_to_skip}.csv")
-save_components = pd.DataFrame(components, columns=[f"Component{i}" for i in np.arange(n_components)])
+save_components = pd.DataFrame(components.T, columns=[f"Component{i}" for i in np.arange(n_components)])
 save_components.to_csv(f"{filename[:-4]}_Components{save_filename_extension}")
