@@ -13,7 +13,7 @@ import seaborn as sns; sns.set()
 from timeit import default_timer as time
 import pandas as pd
 #from tkinter import filedialog, Tk, messagebox
-'''This script uses Williams' script of deconvolution together with wdfReader to produce some informative graphical output.
+'''This script uses Williams' script of deconvolution read_WDF.py to produce some informative graphical output on map scans.
 ATTENTION: For the momoent, the scripts works only on  map scans (.wdf files)
 All of the abovementioned scripts should be in your working directory (maybe you need to add the __init__.py file in the same folder as well.
 You should first choose the data file with the map scan in the .wdf format (I could add later the input dialog)
@@ -442,8 +442,9 @@ fig.canvas.mpl_connect('button_press_event', onclick)
 # 
 #     f.close()
 # =============================================================================
-save_filename_extension = f"_{n_components}components_RSfrom{slice_values[0]}to{slice_values[1]}_fromLine{first_lines_to_skip}to{n_y-last_lines_to_skip}.csv"
+save_filename_extension = f"_{n_components}components_RSfrom{slice_values[0]}to{slice_values[1]}_fromLine{first_lines_to_skip}to{n_y-last_lines_to_skip if last_lines_to_skip else 'End'}.csv"
 save_coeff = pd.concat([coordinates, basic_mix], axis=1)
-save_coeff.to_csv(f"{filename[:-4]}_MixingCoeffs_{n_components}components_RSfrom{slice_values[0]}to{slice_values[1]}_fromLine{first_lines_to_skip}to{n_y-last_lines_to_skip}.csv")
-save_components = pd.DataFrame(components.T, columns=[f"Component{i}" for i in np.arange(n_components)])
+save_coeff.to_csv(f"{filename[:-4]}_MixingCoeffs{save_filename_extension}", index=False)
+save_components = pd.DataFrame(components.T, index=sigma3, columns=[f"Component{i}" for i in np.arange(n_components)])
+save_components.index.name = 'Raman shift in cm-1'
 save_components.to_csv(f"{filename[:-4]}_Components{save_filename_extension}")
