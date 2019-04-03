@@ -35,7 +35,9 @@ it will pop-up another plot with the spectra recorded at this point, together wi
 #filename = 'Data/drop4.wdf'
 filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
 
-initialization = {'SliceValues':(90,1350), 'NMF_NumberOfComponents':3}
+initialization = {'SliceValues':(90,1350), 'NMF_NumberOfComponents':3, 
+                  'NumberOfLinesToSkip_Beggining':None, # Put None if you do not want to skip any lines, otherwise put int value
+                  'NumberOfLinesToSkip_End':None}
 
 
 
@@ -258,8 +260,8 @@ spektar3 = np.copy(spectra1[:, condition])
 
 
 
-first_lines_to_skip = None # Put None if not
-last_lines_to_skip = None
+first_lines_to_skip = initialization['NumberOfLinesToSkip_Beggining']
+last_lines_to_skip = initialization['NumberOfLinesToSkip_End']
 
 
 if not first_lines_to_skip:
@@ -315,7 +317,7 @@ print(f'nmf done is {end-start:.3f}s')
 
   
 mix.resize(n_x*n_y,n_components, )
-print(f"-------> eve ga mixov oblik: {mix.shape}")
+
 mix = np.roll(mix, start_pos, axis=0)
 comp_area = np.empty(n_components)
 for z in range(n_components):
@@ -325,7 +327,7 @@ for z in range(n_components):
 reconstructed_spectra = np.dot(mix, components)
 novi_mix = mix.reshape(n_y,n_x,n_components)
 
-print(f"-------> eve ga mixov oblik: {mix.shape}")
+
 #%% Plotting the components....
 sns.set()
 
