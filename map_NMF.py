@@ -14,10 +14,9 @@ from timeit import default_timer as time
 import pandas as pd
 #from tkinter import filedialog, Tk, messagebox
 '''This script uses Williams' script of deconvolution read_WDF.py to produce some informative graphical output on map scans.
-ATTENTION: For the momoent, the scripts works only on  map scans (.wdf files)
+ATTENTION: For the momoent, the scripts works only on  map scans (from binary .wdf files)
 All of the abovementioned scripts should be in your working directory (maybe you need to add the __init__.py file in the same folder as well.
 You should first choose the data file with the map scan in the .wdf format (I could add later the input dialog)
-You set the "snake" variable to "True" or "False" (depending on the way the map was recorded)
 You choose the number of components. 
 That's it
 You should first get the plot of all the components found,
@@ -25,23 +24,6 @@ Then the heatmap of the mixing coefficients: when you double-click on a pixel on
 it will pop-up another plot with the spectra recorded at this point, together with the contributions of each component
 '''
 
-'''Ideas to improve the script:
-    Add the possiblity to plot the heatmap of the max_height of one selected peak (region) or it's area
-    
-    I should test Katia's idea, which is to do the deconvolultion on several subensembles of spectra,
-    then on the whole spectra and then compare if the add up.
-    
-    Check out the issue of (non)normalized mixture coefficients.
-    Would it be more meaningfull to renormalize the components (divide by max value, for exemple),
-    so the mixture coefficients should add up to 1.
-    (how would the division by max value reflect to mixture coeffs? - should they be then multiplied by the same value?)
-    Now, each component has very different absolute values, 
-    so even if the mixture coeff is small, the first component is nevertheless predominant
-    in the decomosed spectra by the sheer fact that it's intensity is several orders of magnitude greater
-    than that of some other components
-    
-    
-'''
 # -----------------------Choose a file--------------------------------------------
 #filename = 'Data/Test-Na-SiO2 0079 -532nm-obj100-p100-10s over night carto.wdf'
 #filename = 'Data/Test-Na-SiO2 0079 droplet on quartz -532nm-obj50-p50-15s over night_Copy_Copy.wdf'#scan_type 2, measurement_type 2
@@ -53,8 +35,26 @@ it will pop-up another plot with the spectra recorded at this point, together wi
 #filename = 'Data/drop4.wdf'
 filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
 
-measure_params, map_params, sigma2, spectra, origins = read_WDF(filename)
+initialization = {'SliceValues':(90,1350), 'NMF_NumberOfComponents':3}
 
+
+
+
+
+
+
+
+
+measure_params, map_params, sigma2, spectra, origins = read_WDF(filename) #reading the binary .wdf file
+'''
+"measure_params" is a dictionnary containing measurement parameters
+"map_params" is dictionnary containing map parameters
+"sigma2" is a numpy array containing all the ramans shift values at which the intensities were recorded
+"spectra" is a numpy array containing the intensities recorded at each point in a map scan. Its dimension is (number of points in map scan)x(len(sigma2))
+"origins" is a pandas dataframe giving detail on each point in the map scan (time of measurement, coordinates and some other info).
+Remarque: It should be noted that the timestamp recorded in the origins dataframe is in the Windows 64bit format, 
+if you want to convert it to the human readable format, you can use the imported "convert_time" function
+'''
 # Reading the values concerning the map:   
 if measure_params['MeasurementType'] == 'Map':
     # Below we find indices of the axes in our map:
@@ -69,6 +69,7 @@ else:
     
     
 #%% Cosmic Rays:
+'''This part is quite laborious at this stage, you should be much better off if you eliminate the cosmic rays beforehand using WiRE'''
 spectra1 = np.copy(spectra)
 # Next few lines serve to isolate case-to-case file-specific problems in map scans:
 if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
@@ -97,7 +98,9 @@ else:
 spectra1[slice_to_exclude] = np.copy(spectra[slice_replacement])
 
 #%% showing the raw spectra:
-
+'''
+This part allows us to scan trough spectra in order to visualize each spectrum individualy
+'''
 #plt.close('all')
 figr, axr = plt.subplots()
 plt.subplots_adjust(bottom=0.2)
@@ -236,22 +239,18 @@ bnext1000.on_clicked(callback.next1000)
 
 
 #%% SLICING....
+'''
+One should always check if the spectra were recorded with the dead pixels included or not.
+It is a parameter which should be set at the spectrometer configuration (Contact Renishaw for assistance)
+As it turns out the first 10 and the last 16 pixels on the SVI Renishaw spectrometer detector are reserved, 
+and no signal is ever recorded on those pixels by the detector.
+So we should either enter these parameters inside the Wire settings
+or, if it's not done, remove those pixels here manually
 
-# one should always check if the spectra were recorded with the dead pixels included or not
-# It turns out that the first 10 and the last 16 pixels on the Renishaw SVI spectrometer detector are reserved, 
-# and no signal is recorded on those pixels by the detector. So we should either enter these parameters inside the Wire settings
-# or if it's not done, remove those pixels here manually
-# Furthermore, we sometimes want to perform the deconvolution only on a part of the spectra, so here you define the part that interests you
-slice_values = (90,1350)# give your zone in cm-1
-#_coupe_bas = np.where(sigma2 == min(sigma2, key=lambda v: abs(slice_values[0]-v)))[0][0]
-#_coupe_haut = np.where(sigma2 == min(sigma2, key=lambda v: abs(slice_values[1]-v)))[0][0]
-##x_axis_slice = slice(coupe_haut,coupe_bas)
-#x_axis_slice = slice(_coupe_haut,_coupe_bas) # You need to remember the order of the Raman shifts is recorded from higher to lower
-#spectra_slice = np.index_exp[:,x_axis_slice] # Cutting all spectra to the given range 
-#
-#spektar3 = np.copy(spectra[spectra_slice])
-#sigma3 = np.copy(sigma2[x_axis_slice])
-# The whole mumbo-jumbo of the previous 6 lines could also be achieved much simpler with :
+Furthermore, we sometimes want to perform the deconvolution only on a part of the spectra, so here you define the part that interests you
+'''
+slice_values = initialization['SliceValues']# give your zone in cm-1
+
 condition = (sigma2 > slice_values[0]) & (sigma2 < slice_values[1])
 sigma3 = np.copy(sigma2[condition]) # adding np.copy if needed
 spektar3 = np.copy(spectra1[:, condition])
@@ -288,29 +287,7 @@ except NameError:
 
 pca = decomposition.PCA()
 pca_fit = pca.fit(spektar3)
-# =============================================================================
-#   
-# def choose_ncomp():
-#     '''This plot serves as interface for selecting the number of components to use in NMF.
-#     '''
-#     variance_pourc = np.cumsum(pca_fit.explained_variance_ratio_)[:35]
-#     test = 1e6*((-(variance_pourc**2) + 1))/np.sqrt((25-(np.arange(len(variance_pourc))-1)))
-#     plt.scatter(np.arange(4,len(test)),test[4:]) # plots from 1 to 13 components only
-#     plt.title("Double-click on the point to choose the number of components")#\n then middle-click to close the graph")
-# #        plt.ylim(bottom=0.008928, top=0.00894)
-#     plt.xlabel("number of principal components")
-#     plt.ylabel("Variance % covered")
-#     print(f'variance % covered with one single component is {variance_pourc[1]*100:.3f}%')
-#     x = plt.ginput(2)
-#     
-#     for i in np.arange(len(x))[::-1]:
-#         if(x[i]==x[i-1]): # double click
-#             x_value = int(np.round(x[i][0]))
-#             plt.close()
-#             return x_value
-# 
-# =============================================================================
-n_components = 3#choose_ncomp()
+
     
 pca.n_components = 10#n_components
 
@@ -318,14 +295,14 @@ pca.n_components = 10#n_components
 denoised_spectra = pca.fit_transform(spektar3)
 
 denoised_spectra = pca.inverse_transform(denoised_spectra)
-print(f'The chosen number of components is: {n_components}')
+
 
 cleaned_spectra = deconvolution.clean(sigma3, denoised_spectra, mode='area')
 
 #%% NMF step
 
-
-#cleaned_spectra = deconvolution.clean(sigma3, spektar3, mode='area')
+n_components = initialization['NMF_NumberOfComponents']
+print(f'The chosen number of components is: {n_components}')
 
 start = time()
 print('starting nmf... (be patient, this may take some time...)')
