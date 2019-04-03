@@ -413,7 +413,7 @@ for i in range(n_components):
     plt.yticks(10*np.arange(np.floor(n_y/10)), y_ticks[::10])
 fig.text(0.5, 0.014, f"{origins.columns[x_index+1][1]} in {origins.columns[x_index+1][2]}", ha='center')
 fig.text(0.04, 0.5, f"{origins.columns[y_index+1][1]} in {origins.columns[y_index+1][2]}", rotation=90, va='center')
-fig.suptitle('Heatmaps showing the representation of each component throughout the map.')
+fig.suptitle('Heatmaps showing the representation (abundance) of individual components throughout the scanned area.')
 fig.canvas.mpl_connect('button_press_event', onclick)
 
 
