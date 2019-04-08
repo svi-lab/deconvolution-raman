@@ -29,30 +29,31 @@ it will pop-up another plot with the spectra recorded at this point, together wi
 #filename = 'Data/Test-Na-SiO2 0079 droplet on quartz -532nm-obj50-p50-15s over night_Copy_Copy.wdf'#scan_type 2, measurement_type 2
 #filename = 'Data/Test quartz substrate -532nm-obj100-p100-10s.wdf'#scan_type 2, measurement_type 1
 #filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'#scan_type 2 (wtf?), measurement_type 3
-#filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
+filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
 #filename = 'Data/M1ANMap_Depth_2mm_.wdf'
 #filename = 'Data/M1SCMap_depth_.wdf'
 #filename = 'Data/drop4.wdf'
-filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
+#filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
 
-initialization = {'SliceValues':(90,1350), 'NMF_NumberOfComponents':3, 
-                  'NumberOfLinesToSkip_Beggining':None, # Put None if you do not want to skip any lines, otherwise put int value
-                  'NumberOfLinesToSkip_End':None}
-
-
-
+initialization = {'SliceValues':[None,None], # Use None for taking the extremes
+                  'NMF_NumberOfComponents':2, 
+                  'NumberOfLinesToSkip_Beggining':0, # Put in the int number from 0 to _n_y
+                  'NumberOfLinesToSkip_End':0} # Put in the int number from 0 to _n_y - previous element
 
 
 
 
 
 
-measure_params, map_params, sigma2, spectra, origins = read_WDF(filename) #reading the binary .wdf file
+
+
+
+measure_params, map_params, sigma, spectra, origins = read_WDF(filename) #reading the binary .wdf file
 '''
 "measure_params" is a dictionnary containing measurement parameters
 "map_params" is dictionnary containing map parameters
-"sigma2" is a numpy array containing all the ramans shift values at which the intensities were recorded
-"spectra" is a numpy array containing the intensities recorded at each point in a map scan. Its dimension is (number of points in map scan)x(len(sigma2))
+"sigma" is a numpy array containing all the ramans shift values at which the intensities were recorded
+"spectra" is a numpy array containing the intensities recorded at each point in a map scan. Its dimension is (number of points in map scan)x(len(sigma))
 "origins" is a pandas dataframe giving detail on each point in the map scan (time of measurement, coordinates and some other info).
 Remarque: It should be noted that the timestamp recorded in the origins dataframe is in the Windows 64bit format, 
 if you want to convert it to the human readable format, you can use the imported "convert_time" function
@@ -60,44 +61,45 @@ if you want to convert it to the human readable format, you can use the imported
 # Reading the values concerning the map:   
 if measure_params['MeasurementType'] == 'Map':
     # Below we find indices of the axes in our map:
-    x_index, y_index = np.where(map_params['NbSteps']>1)[0]
+    _x_index, _y_index = np.where(map_params['NbSteps']>1)[0]
     # Thus you get the x-axis as the first one in the measurement map having more than 1 step recorded;
     # the other one is named y for the script purposes, even though it might be the depth in reality.
-    n_x, n_y = map_params['NbSteps'][[x_index, y_index]]
-    s_x, s_y = map_params['StepSizes'][[x_index, y_index]]
+    _n_x, _n_y = map_params['NbSteps'][[_x_index, _y_index]]
+    _s_x, _s_y = map_params['StepSizes'][[_x_index, _y_index]]
     print('this is a map scan')
 else:
     raise SystemExit('not a map scan')
     
-    
+if initialization['NumberOfLinesToSkip_Beggining'] + initialization['NumberOfLinesToSkip_End'] > 0:
+    raise SystemExit('You are skiping more lines than present in the scan.\nPlease revise your initialization parameters')
 #%% Cosmic Rays:
 '''This part is quite laborious at this stage, you should be much better off if you eliminate the cosmic rays beforehand using WiRE'''
-spectra1 = np.copy(spectra)
+_spectra1 = np.copy(spectra)
 # Next few lines serve to isolate case-to-case file-specific problems in map scans:
 if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
-    map_view = spectra1.reshape(141,141,-1)
-    map_view[107:137,131:141,:] = map_view[107:137,100:110,:] # patching the hole in the sample
-    spectra1 = map_view.reshape(141**2,-1)
-    slice_to_exclude = slice(5217,5499)
-    slice_replacement = slice(4935,5217)
+    _map_view = _spectra1.reshape(141,141,-1)
+    _map_view[107:137,131:141,:] = _map_view[107:137,100:110,:] # patching the hole in the sample
+    _spectra1 = _map_view.reshape(141**2,-1)
+    _slice_to_exclude = slice(5217,5499)
+    _slice_replacement = slice(4935,5217)
 elif filename == 'Data/M1ANMap_Depth_2mm_.wdf': #Removing a few cosmic rays
-    slice_to_exclude = np.index_exp[[10411, 10277, 17583]]
-    slice_replacement = np.index_exp[[10412, 10278, 17584]]
+    _slice_to_exclude = np.index_exp[[10411, 10277, 17583]]
+    _slice_replacement = np.index_exp[[10412, 10278, 17584]]
 elif filename == 'Data/drop4.wdf': #Removing a few cosmic rays manually
-    slice_to_exclude = np.index_exp[[16021, 5554, 447, 14650, 16261, 12463, 14833, 13912, 5392, 11073, 16600, 20682, 2282, 18162, 20150, 12473, 4293, 16964, 19400]]
-    slice_replacement = np.index_exp[[16020, 5555, 446, 14649, 16262, 12462, 14834, 13911, 5391, 11072,16601, 20683, 2283, 18163, 20151, 12474, 4294, 16965, 19401]]
-    first_lines_to_skip = 79
-    last_lines_to_skip = 20
+    _slice_to_exclude = np.index_exp[[16021, 5554, 447, 14650, 16261, 12463, 14833, 13912, 5392, 11073, 16600, 20682, 2282, 18162, 20150, 12473, 4293, 16964, 19400]]
+    _slice_replacement = np.index_exp[[16020, 5555, 446, 14649, 16262, 12462, 14834, 13911, 5391, 11072,16601, 20683, 2283, 18163, 20151, 12474, 4294, 16965, 19401]]
+#    _first_lines_to_skip = 79
+#    _last_lines_to_skip = 20
 elif filename == 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf': #Removing a few cosmic rays
-    slice_to_exclude = np.index_exp[[326, 700, 702, 1019, 1591, 1717, 2254, 3220, 3668, 3939, 5521, 6358, 6833, 6967, 7335, 7864, 10538, 10572, 11809]]
-    slice_replacement = np.index_exp[[327, 701, 703, 1020, 1592, 1718, 2255, 3221, 3669, 3940, 5522, 6359, 6832, 6968, 7336, 7865, 10539, 10573, 11808]]
+    _slice_to_exclude = np.index_exp[[326, 700, 702, 1019, 1591, 1717, 2254, 3220, 3668, 3939, 5521, 6358, 6833, 6967, 7335, 7864, 8426, 10538, 10572, 11809]]
+    _slice_replacement = np.index_exp[[327, 701, 703, 1020, 1592, 1718, 2255, 3221, 3669, 3940, 5522, 6359, 6832, 6968, 7336, 7865, 8427, 10539, 10573, 11808]]
 else:
-    slice_to_exclude = slice(None)
-    slice_replacement = slice(None)
+    _slice_to_exclude = slice(None)
+    _slice_replacement = slice(None)
 
 
 
-spectra1[slice_to_exclude] = np.copy(spectra[slice_replacement])
+_spectra1[_slice_to_exclude] = np.copy(spectra[_slice_replacement])
 
 #%% showing the raw spectra:
 '''
@@ -107,10 +109,10 @@ This part allows us to scan trough spectra in order to visualize each spectrum i
 figr, axr = plt.subplots()
 plt.subplots_adjust(bottom=0.2)
 
-s = np.copy(spectra1)
+s = np.copy(spectra)
 n_points = int(measure_params['Capacity'])
 s.resize(n_points, int(measure_params['PointsPerSpectrum']))
-l, = plt.plot(sigma2, s[0], lw=2)
+l, = plt.plot(sigma, s[0], lw=2)
 plt.show()
 class Index(object):
     ind = 0
@@ -251,55 +253,57 @@ or, if it's not done, remove those pixels here manually
 
 Furthermore, we sometimes want to perform the deconvolution only on a part of the spectra, so here you define the part that interests you
 '''
-slice_values = initialization['SliceValues']# give your zone in cm-1
+_slice_values = initialization['SliceValues']# give your zone in cm-1
 
-condition = (sigma2 > slice_values[0]) & (sigma2 < slice_values[1])
-sigma3 = np.copy(sigma2[condition]) # adding np.copy if needed
-spektar3 = np.copy(spectra1[:, condition])
+if not _slice_values[0]:
+    _slice_values[0]=np.min(sigma)
+if not _slice_values[1]:
+    _slice_values[1]=np.max(sigma)
+    
+_condition = (sigma >= _slice_values[0]) & (sigma <= _slice_values[1])
+sigma_kept = np.copy(sigma[_condition]) # adding np.copy if needed
+spectra_kept = np.copy(_spectra1[:, _condition])
 
 
 
 
-first_lines_to_skip = initialization['NumberOfLinesToSkip_Beggining']
-last_lines_to_skip = initialization['NumberOfLinesToSkip_End']
+_first_lines_to_skip = initialization['NumberOfLinesToSkip_Beggining']
+_last_lines_to_skip = initialization['NumberOfLinesToSkip_End']
 
 
-if not first_lines_to_skip:
-    start_pos = 0
+_start_pos = _first_lines_to_skip*_n_x
+if _last_lines_to_skip==0:
+    _end_pos = None
 else:
-    start_pos = first_lines_to_skip*n_x
-if not last_lines_to_skip:
-    end_pos = None
-else:
-    end_pos = -last_lines_to_skip*n_x
+    _end_pos = -_last_lines_to_skip*_n_x
 
-spektar3 = spektar3[start_pos:end_pos]
+spectra_kept = spectra_kept[_start_pos:_end_pos]
 
-coordinates = origins.iloc[start_pos:end_pos,[x_index+1, y_index+1]]   
+coordinates = origins.iloc[_start_pos:_end_pos,[_x_index+1, _y_index+1]]   
 
 #%% PCA...
 try:
-    spektar3
+    spectra_kept
 except NameError:
-    spektar3 = np.copy(spectra)
+    spectra_kept = np.copy(spectra)
 try:
-    sigma3
+    sigma_kept
 except NameError:
-    sigma3 = np.copy(sigma2)
+    sigma_kept = np.copy(sigma)
 
 pca = decomposition.PCA()
-pca_fit = pca.fit(spektar3)
+pca_fit = pca.fit(spectra_kept)
 
     
-pca.n_components = 10#n_components
+pca.n_components = min(10, n_points, len(sigma_kept))#n_components
 
 
-denoised_spectra = pca.fit_transform(spektar3)
+denoised_spectra = pca.fit_transform(spectra_kept)
 
 denoised_spectra = pca.inverse_transform(denoised_spectra)
 
 
-cleaned_spectra = deconvolution.clean(sigma3, denoised_spectra, mode='area')
+cleaned_spectra = deconvolution.clean(sigma_kept, denoised_spectra, mode='area')
 
 #%% NMF step
 
@@ -316,16 +320,16 @@ print(f'nmf done is {end-start:.3f}s')
 
 
   
-mix.resize(n_x*n_y,n_components, )
+mix.resize(_n_x*_n_y,n_components, )
 
-mix = np.roll(mix, start_pos, axis=0)
+mix = np.roll(mix, _start_pos, axis=0)
 comp_area = np.empty(n_components)
 for z in range(n_components):
     comp_area[z] = integrate.trapz(components[z])# area beneath each component
     components[z] /= comp_area[z]# normalizing the components by area
     mix[:,z] *= comp_area[np.newaxis,z]# renormalizing the mixture coefficients
 reconstructed_spectra = np.dot(mix, components)
-novi_mix = mix.reshape(n_y,n_x,n_components)
+novi_mix = mix.reshape(_n_y,_n_x,n_components)
 
 
 #%% Plotting the components....
@@ -340,7 +344,7 @@ if n_components > 1:
 else:
     ax = [ax]
 for i in range(n_components):
-    ax[i].plot(sigma3, components[i].T, color=color_set.to_rgba(i))
+    ax[i].plot(sigma_kept, components[i].T, color=color_set.to_rgba(i))
     ax[i].set_title(f'Component {i}')
     ax[i].set_yticks([])
 fi.text(0.5, 0.04, f"{measure_params['XlistDataType']} recordings in {measure_params['XlistDataUnits']} units", ha='center')
@@ -363,15 +367,15 @@ def onclick(event):
         x_pos = int(np.floor(event.xdata))
         y_pos = int(np.floor(event.ydata))
 
-        broj = int(y_pos*n_x + x_pos)
-        spec_num = int(y_pos*n_x - start_pos + x_pos)
+        broj = int(y_pos*_n_x + x_pos)
+        spec_num = int(y_pos*_n_x - _start_pos + x_pos)
 
         if event.dblclick:
             ff,aa = plt.subplots()
-            aa.scatter(sigma3, cleaned_spectra[spec_num], alpha=0.3, label=f'(cleaned) spectrum n°{broj}')
-            aa.plot(sigma3, reconstructed_spectra[broj], '--k', label='reconstructed spectrum')
+            aa.scatter(sigma_kept, cleaned_spectra[spec_num], alpha=0.3, label=f'(cleaned) spectrum n°{broj}')
+            aa.plot(sigma_kept, reconstructed_spectra[broj], '--k', label='reconstructed spectrum')
             for k in range(n_components):
-                aa.plot(sigma3, components[k]*mix[broj][k], color=color_set.to_rgba(k), label=f'Component {k} contribution ({mix[broj][k]*100:.1f}%)')
+                aa.plot(sigma_kept, components[k]*mix[broj][k], color=color_set.to_rgba(k), label=f'Component {k} contribution ({mix[broj][k]*100:.1f}%)')
             
 #this next part is to reorganize the order of labels, so to put the scatter plot first
             handles, labels = aa.get_legend_handles_labels()
@@ -382,21 +386,27 @@ def onclick(event):
             ff.show()
     else:
         print("you clicked outside the canvas, you bastard :)")
-y_ticks = [str(int(x)) for x in list(origins.iloc[:n_x*n_y:n_x,y_index+1])]
-x_ticks = [str(int(x)) for x in list(origins.iloc[:n_x, x_index+1])]
+_xcolumn_name = ['X', 'Y', 'Z'][_x_index]
+_ycolumn_name = ['X', 'Y', 'Z'][_y_index]
+    
+y_ticks = [str(int(x)) for x in np.asarray(origins[_ycolumn_name].iloc[:_n_x*_n_y:_n_x])]
+x_ticks = [str(int(x)) for x in np.asarray(origins[_xcolumn_name].iloc[:_n_x])]
+#y_ticks = [str(int(x)) for x in list(origins.iloc[:_n_x*_n_y:_n_x,_y_index+1])]
+#x_ticks = [str(int(x)) for x in list(origins.iloc[:_n_x, _x_index+1])]
 for i in range(n_components):
     sns.heatmap(novi_mix[:,:,i], ax=ax[i], cmap="jet", annot=False)
-#    ax[i].set_aspect(s_y/s_x)
+#    ax[i].set_aspect(_s_y/_s_x)
     ax[i].set_title(f'Component {i}', color=color_set.to_rgba(i), fontweight='extra bold')
-    plt.xticks(10*np.arange(np.floor(n_x/10)), x_ticks[::10])
-    plt.yticks(10*np.arange(np.floor(n_y/10)), y_ticks[::10])
-fig.text(0.5, 0.014, f"{origins.columns[x_index+1][1]} in {origins.columns[x_index+1][2]}", ha='center')
-fig.text(0.04, 0.5, f"{origins.columns[y_index+1][1]} in {origins.columns[y_index+1][2]}", rotation=90, va='center')
-fig.suptitle('Heatmaps showing the representation (abundance) of individual components throughout the scanned area.')
+    plt.xticks(10*np.arange(np.floor(_n_x/10)), x_ticks[::10])
+    plt.yticks(10*np.arange(np.floor(_n_y/10)), y_ticks[::10])
+fig.text(0.5, 0.014, f"{origins[_xcolumn_name].columns.to_frame().iloc[0,0]} in {origins[_xcolumn_name].columns.to_frame().iloc[0,1]}", ha='center')
+fig.text(0.04, 0.5, f"{origins[_ycolumn_name].columns.to_frame().iloc[0,0]} in {origins[_ycolumn_name].columns.to_frame().iloc[0,1]}", rotation=90, va='center')
+fig.suptitle('Heatmaps showing the abundance of individual components throughout the scanned area.')
 fig.canvas.mpl_connect('button_press_event', onclick)
 
 
 #%%
+
 # =============================================================================
 # subfolder = 'Data/Hamza/'
 # components_df = pd.DataFrame(components, copy=True)
@@ -421,9 +431,9 @@ fig.canvas.mpl_connect('button_press_event', onclick)
 # 
 #     f.close()
 # =============================================================================
-save_filename_extension = f"_{n_components}components_RSfrom{slice_values[0]}to{slice_values[1]}_fromLine{first_lines_to_skip}to{n_y-last_lines_to_skip if last_lines_to_skip else 'End'}.csv"
+save_filename_extension = f"_{n_components}components_RSfrom{_slice_values[0]:.1f}to{_slice_values[1]:.1f}_fromLine{_first_lines_to_skip}to{_n_y-_last_lines_to_skip if _last_lines_to_skip else 'End'}.csv"
 save_coeff = pd.concat([coordinates, basic_mix], axis=1)
 save_coeff.to_csv(f"{filename[:-4]}_MixingCoeffs{save_filename_extension}", index=False)
-save_components = pd.DataFrame(components.T, index=sigma3, columns=[f"Component{i}" for i in np.arange(n_components)])
+save_components = pd.DataFrame(components.T, index=sigma_kept, columns=[f"Component{i}" for i in np.arange(n_components)])
 save_components.index.name = 'Raman shift in cm-1'
 save_components.to_csv(f"{filename[:-4]}_Components{save_filename_extension}")

@@ -18,15 +18,16 @@ def convert_time(t):
     return time.strftime('%c', time.gmtime((t/1e7-11644473600)))
 def read_WDF(filename):
     '''The usage whould be like the following:
+        
         >>>measure_params, map_params, x_values, spectra, origins = read_WDF(filename)
         
         
         Where:
             measure_params: contains all the attributes of the measurement
             map_params: contains the atributes concerning the map (if applicable)
-            x_values: 
-                
-                
+            x_values: the raman shift values
+			spectra: all the spectra recorded in format N x len(x_values), where N is the number of recordings
+			origins: pandas dataframe containing spacetime coordinates of each recording, and some other info
     '''
         
     
@@ -47,13 +48,16 @@ def read_WDF(filename):
     def _read(f=f, dtype=np.uint32, count=1):
         '''Reads bytes from binary file, with the most common values given as default.
         Returns the value itself if one value, or list if count > 1
-        Note that you should do ".decode()" on strings to avoid getting strings like "b'string'"'''
+        Note that you should do ".decode()" on strings to avoid getting strings like "b'string'"
+		For further information, refer to numpy.fromfile() function
+		'''
         if count==1:
             return np.fromfile(f, dtype=dtype, count=count)[0]
         else:
             return np.fromfile(f, dtype=dtype, count=count)[0:count]
-    
 
+    def print_block_header(name, i):
+        print(f"\n{' Block : '+ name + ' ':=^80s}\nsize: {block_sizes[i]}, offset: {b_off[i]}")
     
     
     block_names=[]
@@ -74,7 +78,7 @@ def read_WDF(filename):
     params={}
     gen = [i for i,x in enumerate(block_names) if x==name]
     for i in gen:
-        print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}")
+        print_block_header(name, i)
         f.seek(b_off[i]+16)
 #        TEST_WDF_FLAG = _read(f,np.uint64)
         params['WdfFlag'] = WDF_FLAGS[_read(f,np.uint64)]
@@ -97,9 +101,9 @@ def read_WDF(filename):
         f.seek(240)
         params['Title'] = _read(f,'|S160').decode()
     for key, val in params.items():
-        print(f'{key:-<30s} : \t{val}')
+        print(f'{key:-<40s} : \t{val}')
     if nspectra != ncollected:
-        print(f'\nATTENTION:\nNot all spectra were recorded\nnspectra={nspectra}, while ncollected={ncollected}\nThe {nspectra-ncollected} missing values will be shown as blanks\n')#be filled with zeros.\n')
+        print(f'\nATTENTION:\nNot all spectra were recorded\nExpected nspectra={nspectra}, while ncollected={ncollected}\nThe {nspectra-ncollected} missing values will be shown as blanks\n')
     
     
     
@@ -107,17 +111,17 @@ def read_WDF(filename):
     map_params = {}
     gen = [i for i,x in enumerate(block_names) if x==name]
     for i in gen:
-        print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}")
+        print_block_header(name, i)
         f.seek(b_off[i]+16)
     #    m_flag = _read(f)
-        map_params['MapAreaType'] = MAP_TYPES[_read(f)]#[m_flag+(8-m_flag)*(m_flag//128)]
+        map_params['MapAreaType'] = MAP_TYPES[_read(f)]
         _read(f)
         map_params['InitialCoordinates'] = np.round(_read(f, '<f', count=3),2)
         map_params['StepSizes'] = np.round(_read(f, '<f', count=3),2)
         map_params['NbSteps'] = n_x,n_y,n_z = _read(f, np.uint32, count=3)
         map_params['LineFocusSize'] = _read(f)
     for key, val in map_params.items():
-        print(f'{key:-<30s} : \t{val}')
+        print(f'{key:-<40s} : \t{val}')
      
     
     
@@ -126,36 +130,36 @@ def read_WDF(filename):
     gen = [i for i,x in enumerate(block_names) if x==name]
     for i in gen:
         data_points_count=npoints*ncollected
-        print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}")
+        print_block_header(name, i)
         f.seek(b_off[i]+16)
         spectra = _read(f,'<f', count=data_points_count).reshape(ncollected, npoints)
-        print(f'The number of spectra------------------ : \t{spectra.shape[0]}')
-        print(f'The number of points in each spectra--- : \t{spectra.shape[1]}')
+        print(f'{"The number of spectra":-<40s} : \t{spectra.shape[0]}')
+        print(f'{"The number of points in each spectra":-<40s} : \t{spectra.shape[1]}')
         
         if map_params['MapAreaType'] == 'InvertedRows':
             spectra = [spectra[((xx//n_x)+1)*n_x-(xx%n_x)-1] if (xx//n_x)%2==1 else spectra[xx] for xx in range(nspectra)]
             spectra = np.asarray(spectra)
-            print('\n*It seems your file was recorded using the "Inverted Rows" scan type (sometimes reffered to as "Snake"). ' 
-              'Note that the spectra will be rearanged so it could be read the same way as other scan types (from left to right, and from top to bottom)')
+            print('*It seems your file was recorded using the "Inverted Rows" scan type (sometimes reffered to as "Snake").\n ' 
+              'Note that the spectra will be rearanged so it could be \nread the same way as other scan types (from left to right, and from top to bottom)')
         
         
     
     name = 'XLST'
     gen = [i for i,x in enumerate(block_names) if x==name]
     for i in gen:
-        print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}")
+        print_block_header(name, i)
         f.seek(b_off[i]+16)
         params['XlistDataType'] = DATA_TYPES[_read(f)]
         params['XlistDataUnits'] = DATA_UNITS[_read(f)]
         x_values = _read(f,'<f', count=npoints)
-    print(f"The shape of the x_values is-- : \t{x_values.shape}")
-    print(f"\n*These are the \"{params['XlistDataType']}\" recordings in \"{params['XlistDataUnits']}\" units")
+    print(f"{'The shape of the x_values is':-<40s} : \t{x_values.shape}")
+    print(f"*These are the \"{params['XlistDataType']}\" recordings in \"{params['XlistDataUnits']}\" units")
 
         
     name = 'YLST' # This is where the image is stored (if recorded). When y_values_count > 1, there should be an image.
     gen = [i for i,x in enumerate(block_names) if x==name]
     for i in gen:
-        print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}")
+        print_block_header(name, i)
         f.seek(b_off[i]+16)
         params['YlistDataType'] = DATA_TYPES[_read(f)]
         params['YlistDataUnits'] = DATA_UNITS[_read(f)]
@@ -163,9 +167,9 @@ def read_WDF(filename):
         if y_values_count > 1:
             print("There seem to be the image recorded as well")
             y_values = _read(f,'<f', count=y_values_count)
-            print(f"Its size is----- : \t{y_values.shape}")
+            print(f"{'Its size is':-<40s} : \t{y_values.shape}")
         else:
-            print("No image was recorded")
+            print("*No image was recorded")
     
         
         
@@ -176,7 +180,7 @@ def read_WDF(filename):
     origin_values = np.empty((params['DataOriginCount'],nspectra), dtype='<d')
     gen = [i for i,x in enumerate(block_names) if x==name]
     for i in gen:
-        print(f"\n=============== Block : {name} ===============\nsize: {block_sizes[i]}, offset: {b_off[i]}\n\n\n")
+        print_block_header(name, i)
         f.seek(b_off[i]+16)
         nb_origin_sets = _read(f) # This is the same as params['DataOriginCount']
         for set_n in range(nb_origin_sets):
@@ -185,18 +189,14 @@ def read_WDF(filename):
             origin_set_units.append(DATA_UNITS[_read(f)])
             origin_labels.append(_read(f, '|S16').decode())
             if data_type_flag == 11:
-                origin_values[set_n]=_read(f,np.uint64, count=nspectra)
+                origin_values[set_n]=_read(f,np.uint64, count=nspectra) # special case for reading timestamps
             else:
                 origin_values[set_n] = np.round(_read(f, '<d', count=nspectra),2)
-    
+                
+            if map_params['MapAreaType'] == 'InvertedRows': # To put the "Inverted Rows" into the "from left to right" order
+                origin_values[set_n] = [origin_values[set_n][((xx//n_x)+1)*n_x-(xx%n_x)-1] if (xx//n_x)%2==1 else origin_values[set_n][xx] for xx in range(nspectra)]
+                origin_values[set_n] = np.asarray(origin_values[set_n])                
+    print('\n\n\n')
+
     return params, map_params, x_values, spectra, pd.DataFrame(origin_values.T, columns=[origin_labels, origin_set_dtypes, origin_set_units])
       
-
-
-#self.measure_params = params
-#self.map_params = map_params
-#self.x_values = x_values
-#self.spectra = spectra
-#self.origins = pd.DataFrame(origin_values.T, columns=[origin_labels, origin_set_dtypes, origin_set_units])
-#   
-print('\n\n\n')
