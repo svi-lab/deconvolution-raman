@@ -29,14 +29,15 @@ it will pop-up another plot with the spectra recorded at this point, together wi
 #filename = 'Data/Test-Na-SiO2 0079 droplet on quartz -532nm-obj50-p50-15s over night_Copy_Copy.wdf'#scan_type 2, measurement_type 2
 #filename = 'Data/Test quartz substrate -532nm-obj100-p100-10s.wdf'#scan_type 2, measurement_type 1
 #filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'#scan_type 2 (wtf?), measurement_type 3
-filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
+#filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
+filename = 'Data/M1SC_Map_Qontor_7x7cm_depth_3mm_CR.wdf'
 #filename = 'Data/M1ANMap_Depth_2mm_.wdf'
 #filename = 'Data/M1SCMap_depth_.wdf'
 #filename = 'Data/drop4.wdf'
 #filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
 
-initialization = {'SliceValues':[None,None], # Use None for taking the extremes
-                  'NMF_NumberOfComponents':2, 
+initialization = {'SliceValues':[800,1300], # Use None for taking the extremes
+                  'NMF_NumberOfComponents':6, 
                   'NumberOfLinesToSkip_Beggining':0, # Put in the int number from 0 to _n_y
                   'NumberOfLinesToSkip_End':0} # Put in the int number from 0 to _n_y - previous element
 
@@ -79,7 +80,7 @@ _spectra1 = np.copy(spectra)
 if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
     _map_view = _spectra1.reshape(141,141,-1)
     _map_view[107:137,131:141,:] = _map_view[107:137,100:110,:] # patching the hole in the sample
-    _spectra1 = _map_view.reshape(141**2,-1)
+    _spectra1 = _map_view.reshape(_n_x*_n_y,-1)
     _slice_to_exclude = slice(5217,5499)
     _slice_replacement = slice(4935,5217)
 elif filename == 'Data/M1ANMap_Depth_2mm_.wdf': #Removing a few cosmic rays
@@ -432,8 +433,9 @@ fig.canvas.mpl_connect('button_press_event', onclick)
 #     f.close()
 # =============================================================================
 save_filename_extension = f"_{n_components}components_RSfrom{_slice_values[0]:.1f}to{_slice_values[1]:.1f}_fromLine{_first_lines_to_skip}to{_n_y-_last_lines_to_skip if _last_lines_to_skip else 'End'}.csv"
+save_filename_folder = '/'.join(x for x in filename.split('/')[:-1])+'/'+filename.split('/')[-1][:-4]+'/'
 save_coeff = pd.concat([coordinates, basic_mix], axis=1)
-save_coeff.to_csv(f"{filename[:-4]}_MixingCoeffs{save_filename_extension}", index=False)
+save_coeff.to_csv(f"{save_filename_folder}MixingCoeffs{save_filename_extension}", sep=';', index=False)
 save_components = pd.DataFrame(components.T, index=sigma_kept, columns=[f"Component{i}" for i in np.arange(n_components)])
 save_components.index.name = 'Raman shift in cm-1'
-save_components.to_csv(f"{filename[:-4]}_Components{save_filename_extension}")
+save_components.to_csv(f"{save_filename_folder}Components{save_filename_extension}", sep=';')

@@ -42,7 +42,7 @@ def read_WDF(filename):
         f = open(filename, "rb")
         print(f'Reading the file: "{filename}"\n')
     except IOError:
-        raise IOError(f"File {filename} does noe exist!")
+        raise IOError(f"File {filename} does not exist!")
     filesize = os.path.getsize(filename)
         
     def _read(f=f, dtype=np.uint32, count=1):
