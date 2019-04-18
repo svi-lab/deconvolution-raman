@@ -7,42 +7,81 @@ import pandas as pd
 
 def convert_time(t):
     '''Takes the Windows 64bit timestamp and converts it to human readable format
-    All the timestamps in .WDF seem to be in this W64 format, so this function might come handy for quick transformations when needed
     
+    Input:
+        t: timestamp in W64 format (default for .wdf files)
+    Output:
+        string formatted to suit local settings
     
-    Exemple:
-        time_of_spectrum_recording = [convert_time(x) for x in origins.iloc[:,4]]
-        should give you the list with the times on which each specific spectrum was recorded
+    Example:
+        >>>time_of_spectrum_recording = [convert_time(x) for x in origins.iloc[:,4]]
         
+        should give you the list with the times on which each specific spectrum was recorded    
         '''
     return time.strftime('%c', time.gmtime((t/1e7-11644473600)))
-def read_WDF(filename):
-    '''The usage whould be like the following:
-        
+
+
+def read_WDF(filename, vebrose=False):
+    '''
+    Reads data from the binary .wdf file and returns it in form of five variables
+    
+    Example: 
         >>>measure_params, map_params, x_values, spectra, origins = read_WDF(filename)
-        
-        
-        Where:
-            measure_params: contains all the attributes of the measurement
-            map_params: contains the atributes concerning the map (if applicable)
-            x_values: the raman shift values
-			spectra: all the spectra recorded in format N x len(x_values), where N is the number of recordings
-			origins: pandas dataframe containing spacetime coordinates of each recording, and some other info
+    
+    Input:
+        filename: The path to the file, with the filename itself
+    Output:
+        measure_params: a dictionary containing measurement parameters
+        map_params:  a dictionary containing map parameters
+        x_values: a numpy array containing the raman shifts
+        spectra: numpy array contaiing all the recorded spectra
+        origins: pandas dataframe containing the conditions of each recording.
+                Note that it has triple column names (label, data type, data units)
     '''
         
     
-    DATA_TYPES = ['Arbitrary','Spectral','Intensity','SpatialX','SpatialY','SpatialZ','SpatialR','SpatialTheta','SpatialPhi','Temperature','Pressure','Time','Derived','Polarization','FocusTrack','RampRate','Checksum','Flags','ElapsedTime','Frequency','MpWellSpatialX','MpWellSpatialY','MpLocationIndex','MpWellReference','PAFZActual','PAFZError','PAFSignalUsed','ExposureTime','EndMarker']
-    DATA_UNITS = ['Arbitrary','RamanShift','Wavenumber','Nanometre','ElectronVolt','Micron','Counts','Electrons','Millimetres','Metres','Kelvin','Pascal','Seconds','Milliseconds','Hours','Days','Pixels','Intensity','RelativeIntensity','Degrees','Radians','Celcius','Farenheit','KelvinPerMinute','FileTime','Microseconds','EndMarker']
-    SCAN_TYPES = ['Unspecified','Static','Continuous','StepRepeat','FilterScan','FilterImage','StreamLine','StreamLineHR','Point','MultitrackDiscrete','LineFocusMapping']
-    MAP_TYPES = {0:'RandomPoints', 1:'ColumnMajor', 2:'Alternating', 3:'LineFocusMapping', 4:'InvertedRows', 5:'InvertedColumns', 6:'SurfaceProfile', 7:'XyLine', 128:'Slice'}
+    DATA_TYPES = ['Arbitrary','Spectral','Intensity', 
+                  'SpatialX','SpatialY','SpatialZ', 
+                  'SpatialR','SpatialTheta','SpatialPhi', 
+                  'Temperature','Pressure','Time', 
+                  'Derived','Polarization','FocusTrack', 
+                  'RampRate','Checksum','Flags', 
+                  'ElapsedTime','Frequency', 
+                  'MpWellSpatialX','MpWellSpatialY', 
+                  'MpLocationIndex','MpWellReference', 
+                  'PAFZActual','PAFZError','PAFSignalUsed', 
+                  'ExposureTime','EndMarker']
+    
+    DATA_UNITS = ['Arbitrary','RamanShift','Wavenumber','Nanometre', 
+                  'ElectronVolt','Micron','Counts','Electrons', 
+                  'Millimetres','Metres','Kelvin','Pascal', 
+                  'Seconds','Milliseconds','Hours','Days', 
+                  'Pixels','Intensity','RelativeIntensity', 
+                  'Degrees','Radians', 
+                  'Celcius','Farenheit','KelvinPerMinute', 
+                  'FileTime','Microseconds','EndMarker']
+    
+    SCAN_TYPES = ['Unspecified','Static','Continuous','StepRepeat', 
+                  'FilterScan','FilterImage','StreamLine','StreamLineHR', 
+                  'Point','MultitrackDiscrete','LineFocusMapping']
+    
+    MAP_TYPES = {0:'RandomPoints', 1:'ColumnMajor', 2:'Alternating', 
+                 3:'LineFocusMapping', 4:'InvertedRows', 5:'InvertedColumns', 
+                 6:'SurfaceProfile', 7:'XyLine', 128:'Slice'}
+    
     MEASUREMENT_TYPES = ['Unspecified', 'Single', 'Series', 'Map']
-    WDF_FLAGS = {0:'WdfXYXY',1:'WdfChecksum',2:'WdfCosmicRayRemoval',3:'WdfMultitrack',4:'WdfSaturation',5:'WdfFileBackup',6:'WdfTemporary',7:'WdfSlice',8:'WdfPQ', 16:'UnknownFlag (check in WiRE?)'}
+    
+    WDF_FLAGS = {0:'WdfXYXY',1:'WdfChecksum',2:'WdfCosmicRayRemoval', 
+                 3:'WdfMultitrack',4:'WdfSaturation',5:'WdfFileBackup', 
+                 6:'WdfTemporary',7:'WdfSlice',8:'WdfPQ', 
+                 16:'UnknownFlag (check in WiRE?)'}
 
     try:
         f = open(filename, "rb")
         print(f'Reading the file: "{filename}"\n')
     except IOError:
         raise IOError(f"File {filename} does not exist!")
+        
     filesize = os.path.getsize(filename)
         
     def _read(f=f, dtype=np.uint32, count=1):
@@ -56,14 +95,17 @@ def read_WDF(filename):
         else:
             return np.fromfile(f, dtype=dtype, count=count)[0:count]
 
-    def print_block_header(name, i):
-        print(f"\n{' Block : '+ name + ' ':=^80s}\nsize: {block_sizes[i]}, offset: {b_off[i]}")
+    def print_block_header(name, i, vebrose=vebrose):
+        if vebrose:
+            print(f"\n{' Block : '+ name + ' ':=^80s}\nsize: {block_sizes[i]}, offset: {b_off[i]}")
     
     
     block_names=[]
     block_sizes=[]
     offset = 0
     b_off = []
+    
+    # Reading all of the block names, offsets and sizes
     while offset<filesize-1:
         header_dt = np.dtype([('block_name','|S4'), ('block_id',np.int32), ('block_size',np.int64)])
         f.seek(offset)
@@ -91,7 +133,8 @@ def read_WDF(filename):
         params['XlistLength'] = _read(f) # number of elements in the x-list
         params['DataOriginCount'] = _read(f) # number of data origin lists
         params['ApplicationName'] = _read(f, '|S24').decode()
-        params['ApplicationVersion'] = _read(f, np.uint16, count=4)
+        version = _read(f, np.uint16, count=4)
+        params['ApplicationVersion'] = '.'.join([str(x) for x in version[0:-1]])+' build '+str(version[-1])
         params['ScanType'] = SCAN_TYPES[_read(f)]
         params['MeasurementType'] = MEASUREMENT_TYPES[_read(f)]
         params['StartTime'] = convert_time(_read(f,np.uint64))
@@ -100,13 +143,15 @@ def read_WDF(filename):
         params['LaserWaveLength'] = np.round(10e6/_read(f, '<f'),2)
         f.seek(240)
         params['Title'] = _read(f,'|S160').decode()
-    for key, val in params.items():
-        print(f'{key:-<40s} : \t{val}')
-    if nspectra != ncollected:
-        print(f'\nATTENTION:\nNot all spectra were recorded\nExpected nspectra={nspectra}, while ncollected={ncollected}\nThe {nspectra-ncollected} missing values will be shown as blanks\n')
+    if vebrose:
+        for key, val in params.items():
+            print(f'{key:-<40s} : \t{val}')
+        if nspectra != ncollected:
+            print(f'\nATTENTION:\nNot all spectra were recorded\n'
+                  'Expected nspectra={nspectra}, while ncollected={ncollected}' 
+                  '\nThe {nspectra-ncollected} missing values will be shown as blanks\n')
     
-    
-    
+        
     name = 'WMAP'
     map_params = {}
     gen = [i for i,x in enumerate(block_names) if x==name]
@@ -120,12 +165,11 @@ def read_WDF(filename):
         map_params['StepSizes'] = np.round(_read(f, '<f', count=3),2)
         map_params['NbSteps'] = n_x,n_y,n_z = _read(f, np.uint32, count=3)
         map_params['LineFocusSize'] = _read(f)
-    for key, val in map_params.items():
-        print(f'{key:-<40s} : \t{val}')
+    if vebrose:
+        for key, val in map_params.items():
+            print(f'{key:-<40s} : \t{val}')
      
-    
-    
-    
+       
     name = 'DATA'
     gen = [i for i,x in enumerate(block_names) if x==name]
     for i in gen:
@@ -133,15 +177,18 @@ def read_WDF(filename):
         print_block_header(name, i)
         f.seek(b_off[i]+16)
         spectra = _read(f,'<f', count=data_points_count).reshape(ncollected, npoints)
-        print(f'{"The number of spectra":-<40s} : \t{spectra.shape[0]}')
-        print(f'{"The number of points in each spectra":-<40s} : \t{spectra.shape[1]}')
-        
-        if map_params['MapAreaType'] == 'InvertedRows':
-            spectra = [spectra[((xx//n_x)+1)*n_x-(xx%n_x)-1] if (xx//n_x)%2==1 else spectra[xx] for xx in range(nspectra)]
-            spectra = np.asarray(spectra)
-            print('*It seems your file was recorded using the "Inverted Rows" scan type (sometimes reffered to as "Snake").\n ' 
-              'Note that the spectra will be rearanged so it could be \nread the same way as other scan types (from left to right, and from top to bottom)')
-        
+        if vebrose:
+            print(f'{"The number of spectra":-<40s} : \t{spectra.shape[0]}')
+            print(f'{"The number of points in each spectra":-<40s} : \t{spectra.shape[1]}')
+        if params['MeasurementType'] == 'Map':
+            if map_params['MapAreaType'] == 'InvertedRows':
+                spectra = [spectra[((xx//n_x)+1)*n_x-(xx%n_x)-1] if (xx//n_x)%2==1 else spectra[xx] for xx in range(nspectra)]
+                spectra = np.asarray(spectra)
+                if vebrose:
+                    print('*It seems your file was recorded using the "Inverted Rows" scan type' 
+                          '(sometimes also reffered to as "Snake").\n ' 
+                      'Note that the spectra will be rearanged so it could be \n' 
+                      'read the same way as other scan types (from left to right, and from top to bottom)')
         
     
     name = 'XLST'
@@ -152,8 +199,9 @@ def read_WDF(filename):
         params['XlistDataType'] = DATA_TYPES[_read(f)]
         params['XlistDataUnits'] = DATA_UNITS[_read(f)]
         x_values = _read(f,'<f', count=npoints)
-    print(f"{'The shape of the x_values is':-<40s} : \t{x_values.shape}")
-    print(f"*These are the \"{params['XlistDataType']}\" recordings in \"{params['XlistDataUnits']}\" units")
+    if vebrose:
+        print(f"{'The shape of the x_values is':-<40s} : \t{x_values.shape}")
+        print(f"*These are the \"{params['XlistDataType']}\" recordings in \"{params['XlistDataUnits']}\" units")
 
         
     name = 'YLST' # This is where the image is stored (if recorded). When y_values_count > 1, there should be an image.
@@ -165,13 +213,14 @@ def read_WDF(filename):
         params['YlistDataUnits'] = DATA_UNITS[_read(f)]
         y_values_count = int((block_sizes[i]-24)/4) # if > 1, we can say that this is the number of pixels in the recorded microscope image
         if y_values_count > 1:
-            print("There seem to be the image recorded as well")
             y_values = _read(f,'<f', count=y_values_count)
-            print(f"{'Its size is':-<40s} : \t{y_values.shape}")
+            if vebrose:
+                print("There seem to be the image recorded as well")
+                print(f"{'Its size is':-<40s} : \t{y_values.shape}")
         else:
-            print("*No image was recorded")
+            if vebrose:
+                print("*No image was recorded")
     
-        
         
     name='ORGN'
     origin_labels = []
@@ -193,10 +242,12 @@ def read_WDF(filename):
             else:
                 origin_values[set_n] = np.round(_read(f, '<d', count=nspectra),2)
                 
-            if map_params['MapAreaType'] == 'InvertedRows': # To put the "Inverted Rows" into the "from left to right" order
-                origin_values[set_n] = [origin_values[set_n][((xx//n_x)+1)*n_x-(xx%n_x)-1] if (xx//n_x)%2==1 else origin_values[set_n][xx] for xx in range(nspectra)]
-                origin_values[set_n] = np.asarray(origin_values[set_n])                
-    print('\n\n\n')
+            if params['MeasurementType'] == 'Map':
+                if map_params['MapAreaType'] == 'InvertedRows': # To put the "Inverted Rows" into the "from left to right" order
+                    origin_values[set_n] = [origin_values[set_n][((xx//n_x)+1)*n_x-(xx%n_x)-1] if (xx//n_x)%2==1 else origin_values[set_n][xx] for xx in range(nspectra)]
+                    origin_values[set_n] = np.asarray(origin_values[set_n])                
+    if vebrose:
+        print('\n\n\n')
 
     return params, map_params, x_values, spectra, pd.DataFrame(origin_values.T, columns=[origin_labels, origin_set_dtypes, origin_set_units])
       
