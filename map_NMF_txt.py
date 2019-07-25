@@ -39,16 +39,16 @@ Third plot: the heatmap of the mixing coefficients
 #filename = 'Data/Test quartz substrate -532nm-obj100-p100-10s.wdf'#scan_type 2, measurement_type 1
 #filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'#scan_type 2 (wtf?), measurement_type 3
 #filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
-#filename = 'Data/Etien/silica_600gf.txt'#M1SC_Map_Qontor_7x7cm_depth_3mm_CR.wdf'
-filename = 'Data/Etien/SLS_600gf.txt'
+filename = 'Data/Etien/silica_600gf.txt'#M1SC_Map_Qontor_7x7cm_depth_3mm_CR.wdf'
+#filename = 'Data/Etien/SLS_600gf.txt'
 #filename = 'Data/M1ANMap_Depth_2mm_.wdf'
 #filename = 'Data/M1SCMap_depth_.wdf'
 #filename = 'Data/drop4.wdf'
 #filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
 
-initialization = {'SliceValues': [850, 1250],  # Use None to count all
-                  'NMF_NumberOfComponents': 2,
-                  'PCA_components': 12,
+initialization = {'SliceValues': [250, None],  # Use None to count all
+                  'NMF_NumberOfComponents': 3,
+                  'PCA_components': 8,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
@@ -104,15 +104,6 @@ elif file_extension == 'wdf':
             if you want to convert it to the human readable format,
             you can use the imported "convert_time" function
     '''
-
-if filename == 'Data/Etien/silica_600gf.txt':
-    _slice_to_exclude = np.index_exp[[3973, 7101, 8404, 9018]]
-    _slice_replacement = np.index_exp[[3974, 7102, 8405, 9019]]
-else:
-    _slice_to_exclude = slice(None)
-    _slice_replacement = slice(None)
-
-spectra[_slice_to_exclude] = np.copy(spectra[_slice_replacement])
 
 # %%
 # =============================================================================
@@ -266,6 +257,21 @@ or, if it'_s not done, remove those pixels here manually
 
 Furthermore, we sometimes want to perform the deconvolution only on a part of the spectra, so here you define the part that interests you
 '''
+
+
+if filename == 'Data/Etien/silica_600gf.txt':
+    # This is somewhat unusual, we have two measurement points, side by side
+    # with both having recorded the same cosmic ray?
+    _slice_to_exclude = np.index_exp[[3973, 7101, 8172, 8404, 9018]]
+    _slice_replacement = np.index_exp[[3974, 7102, 8173, 8405, 9019]]
+else:
+    _slice_to_exclude = slice(None)
+    _slice_replacement = slice(None)
+
+spectra[_slice_to_exclude] = np.copy(spectra[_slice_replacement])
+
+
+
 _slice_values = initialization['SliceValues']  # give your zone in cm-1
 
 if not _slice_values[0]:
@@ -308,9 +314,8 @@ except NameError:
 
 pca = decomposition.PCA()
 pca_fit = pca.fit(spectra_kept)
-pca.n_components = min(12, _n_points, len(sigma_kept))
-'''Note that the choice of min 12 components is completely arbitrary
-This could be given as the option in the initialization'''
+pca.n_components = min(initialization['PCA_components'], _n_points, len(sigma_kept))
+
 spectra_denoised = pca.fit_transform(spectra_kept)
 spectra_denoised = pca.inverse_transform(spectra_denoised)
 spectra_cleaned = deconvolution.clean(sigma_kept, spectra_denoised,
@@ -321,7 +326,7 @@ spectra_cleaned = deconvolution.clean(sigma_kept, spectra_denoised,
 #                                   NMF step
 # =============================================================================
 
-_n_components = 3  # initialization['NMF_NumberOfComponents']
+_n_components = initialization['NMF_NumberOfComponents']
 _start = time()
 print('starting nmf... (be patient, this may take some time...)')
 components, mix, nmf_reconstruction_error = \
