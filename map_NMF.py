@@ -153,7 +153,10 @@ This part allows us to scan trough spectra in order to visualize each spectrum
 individualy
 '''
 # plt.close('all')
-see_all_spectra = NavigationButtons(sigma, _spectra1, autoscale_y=False, title="spectrum with it's median and mean")
+_s = np.copy(spectra)
+_n_points = int(measure_params['Capacity'])
+_s.resize(_n_points, int(measure_params['PointsPerSpectrum']))
+see_all_spectra = NavigationButtons(sigma, _s, autoscale_y=False, title="My spectra", figsize=(12,12))
 # %%
 # =============================================================================
 #                               SLICING....
