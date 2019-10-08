@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from read_WDF import convert_time, read_WDF
-from utilities import NavigationButtons, baseline_als2
 import deconvolution
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
@@ -15,11 +14,10 @@ import pandas as pd
 import os
 sns.set()
 '''This script uses Williams' script of deconvolution read_WDF.py
-to produce some informative graphical output on map scans.
+to produce some informative graphical output on map/slice scans.
 ATTENTION: For the moment, the scripts works only on map scans
 (from binary .wdf files)
 All of the abovementioned scripts should be in your working directory
-(maybe you need to add the __init__.py file in the same folder as well.
 You should first choose the data file with the map scan in the .wdf format
 (I could add later the input dialog)
 Set the initialization dictionary values
@@ -35,21 +33,9 @@ Third plot: the heatmap of the mixing coefficients
 '''
 
 # -----------------------Choose a file-----------------------------------------
-# filename = 'Data/Test-Na-SiO2 0079 -532nm-obj100-p100-10s over night carto.wdf'
-# filename = 'Data/Test-Na-SiO2 0079 droplet on quartz -532nm-obj50-p50-15s over night_Copy_Copy.wdf'#scan_type 2, measurement_type 2
-# filename = 'Data/Test quartz substrate -532nm-obj100-p100-10s.wdf'#scan_type 2, measurement_type 1
-# filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'#scan_type 2 (wtf?), measurement_type 3
-#filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
-# filename = 'Data/M1SC_Map_Qontor_7x7cm_depth_3mm_CR.wdf'
-# filename = 'Data/M1ANMap_Depth_2mm_.wdf'
-# filename = 'Data/M1SCMap_depth_.wdf'
-# filename = 'Data/drop4.wdf'
-filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
-#filename = 'Data/Anne/LE19266_lipp-static_x100_10s_P50_slicedepth1.wdf'
-
-
+filename = 'Data/Anne/LE19266_lipp-static_x100_10s_P50_slicedepth1.wdf'
 initialization = {'SliceValues': [100, 1300],  # Use None to count all
-                  'NMF_NumberOfComponents': 6,
+                  'NMF_NumberOfComponents': 4,
                   'PCA_components': 12,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
@@ -104,40 +90,9 @@ _spectra1 = np.copy(spectra)
 
 # The next few lines serve to isolate case-to-case file-specific problems
 # in map scans:
-if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
-    _map_view = _spectra1.reshape(141, 141, -1)
-    # patching the hole in the sample:
-    _map_view[107:137, 131:141, :] = _map_view[107:137, 100:110, :]
-    _spectra1 = _map_view.reshape(_n_x*_n_y, -1)
-    _slice_to_exclude = slice(5217, 5499)  # two bad lines to exclude
-    _slice_replacement = slice(4935, 5217)
-elif filename == 'Data/M1ANMap_Depth_2mm_.wdf':
-    _slice_to_exclude = np.index_exp[[10411, 10277, 17583]]
-    _slice_replacement = np.index_exp[[10412, 10278, 17584]]
-elif filename == 'Data/drop4.wdf':
-    _slice_to_exclude = np.index_exp[[16021, 5554, 447, 14650, 16261, 12463,
-                                      14833, 13912, 5392, 11073, 16600, 20682,
-                                      2282, 18162, 20150, 12473, 4293, 16964,
-                                      19400]]
-    _slice_replacement = np.index_exp[[16020, 5555, 446, 14649, 16262, 12462,
-                                       14834, 13911, 5391, 11072, 16601, 20683,
-                                       2283, 18163, 20151, 12474, 4294, 16965,
-                                       19401]]
-#    _first_lines_to_skip = 79
-#    _last_lines_to_skip = 20
-elif (filename == 'Data/Anne/LE19266_lipp-static_x100_10s_P50_slicedepth1.wdf'):
+if (filename == 'Data/Anne/LE19266_lipp-static_x100_10s_P50_slicedepth1.wdf'):
     _slice_to_exclude = np.index_exp[[63]]
     _slice_replacement = np.index_exp[[64]]
-elif (filename ==
-      'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'):
-    _slice_to_exclude = np.index_exp[[326, 700, 702, 1019, 1591, 1717, 2254,
-                                      3220, 3668, 3939, 5521, 6358, 6833,
-                                      6967, 7335, 7864, 8426, 10538, 10572,
-                                      11809]]
-    _slice_replacement = np.index_exp[[327, 701, 703, 1020, 1592, 1718, 2255,
-                                       3221, 3669, 3940, 5522, 6359, 6832,
-                                       6968, 7336, 7865, 8427, 10539, 10573,
-                                       11808]]
 else:
     _slice_to_exclude = slice(None)
     _slice_replacement = slice(None)
@@ -153,7 +108,136 @@ This part allows us to scan trough spectra in order to visualize each spectrum
 individualy
 '''
 # plt.close('all')
-see_all_spectra = NavigationButtons(sigma, _spectra1, autoscale_y=False, title="spectrum with it's median and mean")
+figr, axr = plt.subplots()
+plt.subplots_adjust(bottom=0.2)
+
+_s = np.copy(spectra)
+_n_points = int(measure_params['Capacity'])
+_s.resize(_n_points, int(measure_params['PointsPerSpectrum']))
+l, = plt.plot(sigma, _s[0], lw=2)
+plt.show()
+
+
+class Index(object):
+    ind = 0
+
+    def next(self, event):
+        self.ind += 1
+        _i = self.ind % _n_points
+        ydata = _s[_i]
+        l.set_ydata(ydata)
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {_i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
+
+    def next10(self, event):
+        self.ind += 10
+        _i = self.ind % _n_points
+        ydata = _s[_i]
+        l.set_ydata(ydata)
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {_i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
+
+    def next100(self, event):
+        self.ind += 100
+        _i = self.ind % _n_points
+        ydata = _s[_i]
+        l.set_ydata(ydata)
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {_i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
+
+    def next1000(self, event):
+        self.ind += 1000
+        _i = self.ind % _n_points
+        ydata = _s[_i]
+        l.set_ydata(ydata)
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {_i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
+
+    def prev(self, event):
+        self.ind -= 1
+        _i = self.ind % _n_points
+        ydata = _s[_i]
+        l.set_ydata(ydata)
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {_i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
+
+    def prev10(self, event):
+        self.ind -= 10
+        _i = self.ind % _n_points
+        ydata = _s[_i]
+        l.set_ydata(ydata)
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {_i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
+
+    def prev100(self, event):
+        self.ind -= 100
+        _i = self.ind % _n_points
+        ydata = _s[_i]
+        l.set_ydata(ydata)
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {_i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
+
+    def prev1000(self, event):
+        self.ind -= 1000
+        _i = (self.ind) % _n_points
+        ydata = _s[_i]
+        l.set_ydata(ydata)
+        axr.relim()
+        axr.autoscale_view(None, False, True)
+        axr.set_title(f'spectrum number {_i}')
+        figr.canvas.draw()
+        figr.canvas.flush_events()
+
+
+callback = Index()
+
+axprev1000 = plt.axes([0.097, 0.05, 0.1, 0.04])
+axprev100 = plt.axes([0.198, 0.05, 0.1, 0.04])
+axprev10 = plt.axes([0.299, 0.05, 0.1, 0.04])
+axprev1 = plt.axes([0.4, 0.05, 0.1, 0.04])
+axnext1 = plt.axes([0.501, 0.05, 0.1, 0.04])
+axnext10 = plt.axes([0.602, 0.05, 0.1, 0.04])
+axnext100 = plt.axes([0.703, 0.05, 0.1, 0.04])
+axnext1000 = plt.axes([0.804, 0.05, 0.1, 0.04])
+
+bprev1000 = Button(axprev1000, 'Prev.1000')
+bprev1000.on_clicked(callback.prev1000)
+bprev100 = Button(axprev100, 'Prev.100')
+bprev100.on_clicked(callback.prev100)
+bprev10 = Button(axprev10, 'Prev.10')
+bprev10.on_clicked(callback.prev10)
+bprev = Button(axprev1, 'Prev.1')
+bprev.on_clicked(callback.prev)
+bnext = Button(axnext1, 'Next1')
+bnext.on_clicked(callback.next)
+bnext10 = Button(axnext10, 'Next10')
+bnext10.on_clicked(callback.next10)
+bnext100 = Button(axnext100, 'Next100')
+bnext100.on_clicked(callback.next100)
+bnext1000 = Button(axnext1000, 'Next1000')
+bnext1000.on_clicked(callback.next1000)
+
 # %%
 # =============================================================================
 #                               SLICING....
@@ -168,7 +252,7 @@ pixels by the detector. So we should either enter these parameters inside the
 Wire settings or, if it'_s not done, remove those pixels here manually
 
 Furthermore, we sometimes want to perform the deconvolution only on a part
-of the spectra, so here you should define the part that interests you
+of the spectra, so here isolate only the part that interests you
 '''
 _slice_values = initialization['SliceValues']  # give your zone in cm-1
 
@@ -195,6 +279,34 @@ spectra_kept = spectra_kept[_start_pos:_end_pos]
 _coordinates = origins.iloc[_start_pos:_end_pos, [_x_index+1, _y_index+1]]
 
 # %%
+from scipy import sparse
+from scipy.sparse.linalg import spsolve, inv
+
+def baseline_als2(y, lam=10e4, p=10e-5, niter=12):
+  L = len(y)
+  D = sparse.csc_matrix(np.diff(np.eye(L), 2))
+  w = np.ones(L)
+  for i in np.arange(niter):
+    W = sparse.spdiags(w, 0, L, L)
+    Z = W + lam * D.dot(D.transpose())
+    z = spsolve(Z, w*y)
+    w = p * (y > z) + (1-p) * (y < z)
+  return z
+
+try:
+    spectra_kept
+except NameError:
+    spectra_kept = np.copy(spectra)
+try:
+    sigma_kept
+except NameError:
+    sigma_kept = np.copy(sigma)
+
+
+
+
+
+#%%
 # =============================================================================
 #                                     PCA...
 # =============================================================================
@@ -223,20 +335,23 @@ spectra_cleaned = deconvolution.clean(sigma_kept, spectra_denoised,
 # =============================================================================
 
 _n_components = initialization['NMF_NumberOfComponents']
-_start = time()
-print('starting nmf... (be patient, this may take some time...)')
-components, mix, nmf_reconstruction_error = \
-    deconvolution.nmf_step(spectra_cleaned, _n_components, init='nndsvda')
 # =============================================================================
-# _basic_mix = pd.DataFrame(
-#         np.copy(mix),
-#         columns=[f"mixing coeff. for the component {l}"
-#                  for l in np.arange(mix.shape[1])]
-#         )
+# _start = time()
+# print('starting nmf... (be patient, this may take some time...)')
+# components, mix, nmf_reconstruction_error = \
+#     deconvolution.nmf_step(spectra_cleaned, _n_components,
+#                            init='nndsvdar', beta=30000000)
+#
+#
+# _end = time()
+# print(f'nmf done is {_end-_start:.3f}_s')
 # =============================================================================
-_end = time()
-print(f'nmf done is {_end-_start:.3f}_s')
-
+_n_components = 4
+nmf  = decomposition.NMF(_n_components,
+                         init='nndsvda', alpha=0.006)
+mix = nmf.fit_transform(spectra_cleaned)
+components = nmf.components_
+nmf_reconstruction_error = nmf.reconstruction_err_
 # %%
 # =============================================================================
 #                    preparing the mixture coefficients
@@ -336,6 +451,8 @@ def onclick(event):
 _xcolumn_name = ['X', 'Y', 'Z'][_x_index]
 _ycolumn_name = ['X', 'Y', 'Z'][_y_index]
 
+tsx = 2  # to scale the denisty of the ticks
+tsy = 1
 _y_ticks = [str(int(x)) for x in
             np.asarray(origins[_ycolumn_name].iloc[:_n_x*_n_y:_n_x])]
 _x_ticks = [str(int(x)) for x in
@@ -346,8 +463,8 @@ for _i in range(_n_components):
 #    _ax[_i].set_aspect(_s_y/_s_x)
     _ax[_i].set_title(f'Component {_i}', color=color_set.to_rgba(_i),
                       fontweight='extra bold')
-    plt.xticks(10*np.arange(np.floor(_n_x/10)), _x_ticks[::10])
-    plt.yticks(10*np.arange(np.floor(_n_y/10)), _y_ticks[::10])
+    plt.xticks(tsx*np.arange(np.floor(_n_x/tsx)), _x_ticks[::tsx])
+    plt.yticks(tsy*np.arange(np.floor(_n_y/tsy)), _y_ticks[::tsy])
 fig.text(0.5, 0.014,
          f"{origins[_xcolumn_name].columns.to_frame().iloc[0,0]} in"
          f"{origins[_xcolumn_name].columns.to_frame().iloc[0,1]}",

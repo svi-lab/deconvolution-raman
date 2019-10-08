@@ -39,12 +39,14 @@ Third plot: the heatmap of the mixing coefficients
 #filename = 'Data/Test quartz substrate -532nm-obj100-p100-10s.wdf'#scan_type 2, measurement_type 1
 #filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'#scan_type 2 (wtf?), measurement_type 3
 #filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
-filename = 'Data/Etien/silica_600gf.txt'#M1SC_Map_Qontor_7x7cm_depth_3mm_CR.wdf'
+#filename = 'Data/Etien/silica_600gf.txt'#M1SC_Map_Qontor_7x7cm_depth_3mm_CR.wdf'
 #filename = 'Data/Etien/SLS_600gf.txt'
 #filename = 'Data/M1ANMap_Depth_2mm_.wdf'
 #filename = 'Data/M1SCMap_depth_.wdf'
 #filename = 'Data/drop4.wdf'
 #filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
+filename = "../Raman/Data/Hamza/H_ExtraPure_Powders.csv"
+
 
 initialization = {'SliceValues': [250, None],  # Use None to count all
                   'NMF_NumberOfComponents': 3,
@@ -83,6 +85,13 @@ if file_extension == 'txt':
                    else spectra[xx]
                    for xx in range(nspectra)]
         spectra = np.asarray(spectra)
+
+elif file_extension == 'csv':
+
+    lista = pd.read_csv(filename, delimiter=";", decimal=',').iloc[:,:5]
+
+    sigma = np.asarray(lista.iloc[150:2000, 0])
+    spectra = np.asarray(lista.iloc[150:2000, 1:]).T
 
 elif file_extension == 'wdf':
     # Reading the data from the .wdf file
@@ -248,14 +257,16 @@ bnext1000.on_clicked(callback.next1000)
 #                               SLICING....
 # =============================================================================
 '''
-One should always check if the spectra were recorded with the dead pixels included or not.
-It is a parameter which should be set at the spectrometer configuration (Contact Renishaw for assistance)
-As it turns out the first 10 and the last 16 pixels on the SVI Renishaw spectrometer detector are reserved,
+One should always check if the spectra were recorded with the dead pixels
+included or not. It is a parameter which should be set at the spectrometer
+configuration (Contact Renishaw for assistance). As it turns out the first 10
+and the last 16 pixels on the SVI Renishaw spectrometer detector are reserved,
 and no signal is ever recorded on those pixels by the detector.
 So we should either enter these parameters inside the Wire settings
 or, if it'_s not done, remove those pixels here manually
 
-Furthermore, we sometimes want to perform the deconvolution only on a part of the spectra, so here you define the part that interests you
+Furthermore, we sometimes want to perform the deconvolution only on a part of
+the spectra, so here you define the part that interests you
 '''
 
 
@@ -314,7 +325,8 @@ except NameError:
 
 pca = decomposition.PCA()
 pca_fit = pca.fit(spectra_kept)
-pca.n_components = min(initialization['PCA_components'], _n_points, len(sigma_kept))
+pca.n_components = min(initialization['PCA_components'],
+                       _n_points, len(sigma_kept))
 
 spectra_denoised = pca.fit_transform(spectra_kept)
 spectra_denoised = pca.inverse_transform(spectra_denoised)
@@ -455,8 +467,13 @@ fig.canvas.mpl_connect('button_press_event', onclick)
 # =============================================================================
 #        saving some data for usage in other software (Origin, Excel..)
 # =============================================================================
-_save_filename_extension = f"_{_n_components}components_RSfrom{_slice_values[0]:.1f}to{_slice_values[1]:.1f}_fromLine{_first_lines_to_skip}to{_n_y-_last_lines_to_skip if _last_lines_to_skip else 'End'}.csv"
-_save_filename_folder = '/'.join(x for x in filename.split('/')[:-1])+'/'+filename.split('/')[-1][:-4]+'/'
+last_line_read = f"{_n_y-_last_lines_to_skip if _last_lines_to_skip else 'End'}"
+_save_filename_extension = (f"_{_n_components}components_RSfrom"
+                            f"{_slice_values[0]:.1f}to{_slice_values[1]:.1f}"
+                            f"_fromLine{_first_lines_to_skip}to" \
+                            + last_line_read + ".csv"
+_save_filename_folder = '/'.join(x for x in filename.split('/')[:-1]) + '/' \
+                        + filename.split('/')[-1][:-4]+'/'
 if not os.path.exists(_save_filename_folder):
     os.mkdir(_save_filename_folder)
 
