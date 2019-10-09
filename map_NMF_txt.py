@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from read_WDF import convert_time, read_WDF
+from utilities import NavigationButtons
 import deconvolution
+from warnings import warn
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib import colors
@@ -39,17 +41,16 @@ Third plot: the heatmap of the mixing coefficients
 #filename = 'Data/Test quartz substrate -532nm-obj100-p100-10s.wdf'#scan_type 2, measurement_type 1
 #filename = 'Data/Hamza-Na-SiO2-532nm-obj100-p100-10s-extended-cartography - 1 accumulations.wdf'#scan_type 2 (wtf?), measurement_type 3
 #filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
-#filename = 'Data/Etien/silica_600gf.txt'#M1SC_Map_Qontor_7x7cm_depth_3mm_CR.wdf'
+filename = 'Data/Etien/silica_600gf.txt'#M1SC_Map_Qontor_7x7cm_depth_3mm_CR.wdf'
 #filename = 'Data/Etien/SLS_600gf.txt'
 #filename = 'Data/M1ANMap_Depth_2mm_.wdf'
 #filename = 'Data/M1SCMap_depth_.wdf'
 #filename = 'Data/drop4.wdf'
 #filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
-filename = "../Raman/Data/Hamza/H_ExtraPure_Powders.csv"
 
 
 initialization = {'SliceValues': [250, None],  # Use None to count all
-                  'NMF_NumberOfComponents': 3,
+                  'NMF_NumberOfComponents': 4,
                   'PCA_components': 8,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
@@ -86,13 +87,6 @@ if file_extension == 'txt':
                    for xx in range(nspectra)]
         spectra = np.asarray(spectra)
 
-elif file_extension == 'csv':
-
-    lista = pd.read_csv(filename, delimiter=";", decimal=',').iloc[:,:5]
-
-    sigma = np.asarray(lista.iloc[150:2000, 0])
-    spectra = np.asarray(lista.iloc[150:2000, 1:]).T
-
 elif file_extension == 'wdf':
     # Reading the data from the .wdf file
     measure_params, map_params, sigma, spectra, origins = read_WDF(
@@ -123,134 +117,16 @@ This part allows us to scan trough spectra in order to visualize
 each spectrum individualy
 '''
 # plt.close('all')
-figr, axr = plt.subplots()
-plt.subplots_adjust(bottom=0.2)
 
 _s = np.copy(spectra)
+try:
+    _s.resize(_n_points, len(sigma))
+except:
+    _n_points = _s.shape[0]
 
-_s.resize(_n_points, len(sigma))
-l, = plt.plot(sigma, _s[0], lw=2)
+see_all_spectra = NavigationButtons(sigma, _s, autoscale_y=False,
+                                    title="My spectra", figsize=(12,12))
 plt.show()
-
-
-class Index(object):
-    ind = 0
-
-    def next(self, event):
-        self.ind += 1
-        _i = self.ind % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-    def next10(self, event):
-        self.ind += 10
-        _i = self.ind % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-    def next100(self, event):
-        self.ind += 100
-        _i = self.ind % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-    def next1000(self, event):
-        self.ind += 1000
-        _i = self.ind % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-    def prev(self, event):
-        self.ind -= 1
-        _i = self.ind % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-    def prev10(self, event):
-        self.ind -= 10
-        _i = self.ind % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-    def prev100(self, event):
-        self.ind -= 100
-        _i = self.ind % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-    def prev1000(self, event):
-        self.ind -= 1000
-        _i = (self.ind) % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-callback = Index()
-
-axprev1000 = plt.axes([0.097, 0.05, 0.1, 0.04])
-axprev100 = plt.axes([0.198, 0.05, 0.1, 0.04])
-axprev10 = plt.axes([0.299, 0.05, 0.1, 0.04])
-axprev1 = plt.axes([0.4, 0.05, 0.1, 0.04])
-axnext1 = plt.axes([0.501, 0.05, 0.1, 0.04])
-axnext10 = plt.axes([0.602, 0.05, 0.1, 0.04])
-axnext100 = plt.axes([0.703, 0.05, 0.1, 0.04])
-axnext1000 = plt.axes([0.804, 0.05, 0.1, 0.04])
-
-bprev1000 = Button(axprev1000, 'Prev.1000')
-bprev1000.on_clicked(callback.prev1000)
-bprev100 = Button(axprev100, 'Prev.100')
-bprev100.on_clicked(callback.prev100)
-bprev10 = Button(axprev10, 'Prev.10')
-bprev10.on_clicked(callback.prev10)
-bprev = Button(axprev1, 'Prev.1')
-bprev.on_clicked(callback.prev)
-bnext = Button(axnext1, 'Next1')
-bnext.on_clicked(callback.next)
-bnext10 = Button(axnext10, 'Next10')
-bnext10.on_clicked(callback.next10)
-bnext100 = Button(axnext100, 'Next100')
-bnext100.on_clicked(callback.next100)
-bnext1000 = Button(axnext1000, 'Next1000')
-bnext1000.on_clicked(callback.next1000)
 
 #%%
 # =============================================================================
@@ -297,13 +173,16 @@ spectra_kept = np.copy(spectra[:, _condition])
 _first_lines_to_skip = initialization['NumberOfLinesToSkip_Beggining']
 _last_lines_to_skip = initialization['NumberOfLinesToSkip_End']
 
-_start_pos = _first_lines_to_skip*_n_x
-if _last_lines_to_skip == 0:
-    _end_pos = None
-else:
-    _end_pos = -_last_lines_to_skip*_n_x
+try:
+    _start_pos = _first_lines_to_skip*_n_x
+    if _last_lines_to_skip == 0:
+        _end_pos = None
+    else:
+        _end_pos = -_last_lines_to_skip*_n_x
 
-spectra_kept = spectra_kept[_start_pos:_end_pos]
+    spectra_kept = spectra_kept[_start_pos:_end_pos]
+except:
+    warn('no lines to skip')
 # origins.iloc[_start_pos:_end_pos,[_x_index+1, _y_index+1]]
 _coordinates = pd.DataFrame([np.arange(0, _n_x), np.arange(0, _n_y)])
 
@@ -462,7 +341,7 @@ fig.suptitle('Heatmaps showing the abundance of individual components'
              'throughout the scanned area.')
 fig.canvas.mpl_connect('button_press_event', onclick)
 
-
+plt.show()
 # %%
 # =============================================================================
 #        saving some data for usage in other software (Origin, Excel..)
@@ -471,9 +350,8 @@ last_line_read = f"{_n_y-_last_lines_to_skip if _last_lines_to_skip else 'End'}"
 _save_filename_extension = (f"_{_n_components}components_RSfrom"
                             f"{_slice_values[0]:.1f}to{_slice_values[1]:.1f}"
                             f"_fromLine{_first_lines_to_skip}to" \
-                            + last_line_read + ".csv"
-_save_filename_folder = '/'.join(x for x in filename.split('/')[:-1]) + '/' \
-                        + filename.split('/')[-1][:-4]+'/'
+                            + last_line_read + ".csv")
+_save_filename_folder = '/'.join(filename.split('/')[:-1] + [filename.split('/')[-1][:-4]] + [''])
 if not os.path.exists(_save_filename_folder):
     os.mkdir(_save_filename_folder)
 
