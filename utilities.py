@@ -15,16 +15,35 @@ from scipy import sparse
 from scipy.sparse.linalg import spsolve, inv
 
 
-def baseline_als2(y, lam=10e4, p=10e-5, niter=12):
-  L = len(y)
-  D = sparse.csc_matrix(np.diff(np.eye(L), 2))
-  w = np.ones(L)
-  for i in np.arange(niter):
+def baseline_als3(y, lam=1e5, p=5e-5, niter=12):
+    '''Found on stackoverflow.
+    Schematic explanaton of the params to
+    get the "feel" of how the algo works:
+    Params:
+        y: your spectrum on which to find the baseline
+        lam: can be viewed as the radius of the ball
+        p: can be viewed as the measure of how much the ball
+            can penetrate into the spectra from below
+        niter: number of iterations
+            (the resulting baseline should stabilize after
+            some number of iterations)
+    Returns:
+        z: the baseline
+    ---------------------------------------------
+    For more info, see the discussion on:
+    https://stackoverflow.com/questions/29156532/python-baseline-correction-library'''
+    L = len(y)
+    D = sparse.diags([1, -2, 1], [0, -1, -2], shape=(L, L-2))
+    D = lam * D.dot(D.transpose()) # Precompute this term since it does not depend on `w`
+    w = np.ones(L)
     W = sparse.spdiags(w, 0, L, L)
-    Z = W + lam * D.dot(D.transpose())
-    z = spsolve(Z, w*y)
-    w = p * (y > z) + (1-p) * (y < z)
-  return z
+    for i in range(niter):
+        W.setdiag(w) # Do not create a new matrix, just update diagonal values
+        Z = W + D
+        z = spsolve(Z, w*y)
+        w = p * (y > z) + (1-p) * (y < z)
+    return z
+
 
 def pV(x, h=30, x0=0, w=10, factor=0.5):
     '''Manualy created pseudo-Voigt profile
@@ -119,24 +138,26 @@ class NavigationButtons(object):
     Output:
         matplotlib graph with navigation buttons to cycle trought spectra
     Example:
-	# Let's say you have a ndarray containing 10 spectra, each 500 points long
-	# base_spectras.shape should give (10, 500)
-	# your sigma.shape should be (500, )
-	# Then let's say you fitted each of your spectra with 3 gaussian peaks
-	# and you want to plot these as well. For each of your ten spectra,
-	# you will have something like:
-	>>>spectra_fitted[i] = multiple_gaussian_function(sigma, *params[i])
-	# your spectra_fitted should have the same shape as your spectra.
-	# Now, let's say you want also to plot each of the gaussian peaks as well
-	# for "i"th spectra you will have 3 gaussians
-	>>>for k in range(3):
-	>>>	G[i][k] = single_gaussian_function(sigma, *params[i][k])
-	# At the end, you stack all of this in one ndarray :
-	>>>multiple_curves_to_plot = np.stack((base_spectras, spectra_fitted, G1, G2, G3), axis=-1)
+    # Let's say you have a ndarray containing 10 spectra, each 500 points long
+    # base_spectras.shape should give (10, 500)
+    # your sigma.shape should be (500, )
+    # Then let's say you fitted each of your spectra with 3 gaussian peaks
+    # and you want to plot these as well. For each of your ten spectra,
+    # you will have something like:
+    >>>spectra_fitted[i] = multiple_gaussian_function(sigma, *params[i])
+    # your spectra_fitted should have the same shape as your spectra.
+    # Now, let's say you want also to plot each of the gaussian peaks as well
+    # for "i"th spectra you will have 3 gaussians
+    >>>for k in range(3):
+    >>>G[i][k] = single_gaussian_function(sigma, *params[i][k])
+    # At the end, you stack all of this in one ndarray :
+    >>>multiple_curves_to_plot = np.stack((
+            base_spectras, spectra_fitted, G1, G2, G3), axis=-1)
     '''
     ind = 0
 
-    def __init__(self, sigma, spectra, autoscale_y=False, title='', figsize=(9,9)):
+    def __init__(self, sigma, spectra, autoscale_y=False, title='',
+                 **kwargs):
         self.y_autoscale = autoscale_y
         self.n_points = spectra.shape[0]
         if len(spectra.shape) == 2:
@@ -147,7 +168,7 @@ class NavigationButtons(object):
             raise ValueError('Check the shape of your spactra. It should be (n_spectra, n_points, n_curves)')
         self.title = title
         self.sigma = sigma
-        self.figr, self.axr = plt.subplots(figsize=figsize)
+        self.figr, self.axr = plt.subplots(**kwargs)
         self.axr.set_title(f'{title} : spectrum number 0')
         self.figr.subplots_adjust(bottom=0.2)
         self.l = self.axr.plot(self.sigma, self.s[0], lw=2) # l potentially contains multiple lines

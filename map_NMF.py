@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from read_WDF import convert_time, read_WDF
-from utilities import NavigationButtons, baseline_als2
+from utilities import NavigationButtons, baseline_als3
 import deconvolution
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
@@ -153,10 +153,17 @@ This part allows us to scan trough spectra in order to visualize each spectrum
 individualy
 '''
 # plt.close('all')
-_s = np.copy(spectra)
-_n_points = int(measure_params['Capacity'])
-_s.resize(_n_points, int(measure_params['PointsPerSpectrum']))
-see_all_spectra = NavigationButtons(sigma, _s, autoscale_y=False, title="My spectra", figsize=(12,12))
+# =============================================================================
+# _sstart = time()
+# spectra2 = _spectra1 - np.asarray([baseline_als3(ss) for ss in _spectra1])
+# _send = time()
+# print(f"baseline removal done in {_send-_sstart:.3f}_s")
+# _s = np.copy(spectra2)
+# _n_points = int(measure_params['Capacity'])
+# _s.resize(_n_points, int(measure_params['PointsPerSpectrum']))
+# =============================================================================
+see_all_spectra = NavigationButtons(sigma, _s, autoscale_y=False,
+                                    title="My spectra", figsize=(12,12))
 # %%
 # =============================================================================
 #                               SLICING....
