@@ -42,7 +42,7 @@ def baseline_als3(y, lam=1e5, p=5e-5, niter=12):
         w = p * (y > z) + (1-p) * (y < z)
     return z
 
-
+# %%
 def pV(x, h=30, x0=0, w=10, factor=0.5):
     '''Manualy created pseudo-Voigt profile
     Parameters:
@@ -70,8 +70,8 @@ def pV(x, h=30, x0=0, w=10, factor=0.5):
     return(intensity * (factor * Gauss(x, w)
                         + (1-factor) * Lorentz(x, w)))
 
-
-def multi_pV(x, *params):
+# %%
+def multi_peak(x, *params, funct=pV):
     '''
     The function giving the sum of the pseudo-Voigt peaks.
     Parameters:
@@ -92,11 +92,15 @@ def multi_pV(x, *params):
                         "and the remainign ones the parameters of the funct.")
     result = np.zeros_like(x, dtype=np.float)
     for i in range(0, nn, n):
-        result += pV(x, *params[i:i+n])  # h, x0, w, r)
+        result += funct(x, *params[i:i+n])  # h, x0, w, r)
     return result
 
+# %%
 
-def create_map_spectra(x=np.arange(150, 250, 0.34), initial_peak_params=[171, 200, 8, 0.7], N=2000, ponderation=None):
+
+def create_map_spectra(x=np.arange(150, 250, 0.34),
+                       initial_peak_params=[171, 200, 8, 0.7],
+                       N=2000, ponderation=None):
     '''Creates simulated spectra
     Params:
         x: independent variable
@@ -115,12 +119,9 @@ def create_map_spectra(x=np.arange(150, 250, 0.34), initial_peak_params=[171, 20
     nn = len(initial_peak_params)
     peaks_params = (1 + (np.random.rand(N, nn) - 0.5) / ponderation) \
                     * np.asarray(initial_peak_params)
-
-    spectra = np.asarray([(multi_pV(x, *peaks_params[i]) + (np.random.random(len(x))-0.5)*5) * (1 + (np.random.random(len(x))-0.5)/20) for i in range(N)])
-
+    spectra = np.asarray([(multi_peak(x, *peaks_params[i], funct=pV) + (np.random.random(len(x))-0.5)*5) * (1 + (np.random.random(len(x))-0.5)/20) for i in range(N)])
     return spectra
 # %%
-
 
 
 class NavigationButtons(object):
@@ -364,7 +365,7 @@ class fitonclick(object):
                      linestyle='none', marker='o', c='k', ms=4, alpha=0.5)
         self.ax.set_title('Left-click to add/remove peaks,'
                           'Scroll to adjust width, \nRight-click to draw sum,'
-                          ' Double-Middle-Click when done')
+                          ' Double-Right-Click when done')
         self.x_size = self.set_size(self.x)
         self.y_size = 2*self.set_size(self.y)
         self.cid = self.fig.canvas.mpl_connect('button_press_event', self.onclick)
@@ -483,20 +484,21 @@ class fitonclick(object):
                 else:  # if click was not on any of the already drawn elipsis
                     self._add_peak(event)
 
-            elif event.button == 3 and not event.step:
-                # On some computers middle and right click have both the value 3
-                self._draw_peak_sum()
-
-            elif event.step != 0:
+            elif event.step:
                 if self.peak_counter:
                     self._adjust_peak_width(event, peak_identifier=-1)
                     # -1 means that scrolling will only affect the last plotted peak
 
-            elif event.button !=1 and event.dblclick:
-                # Double Middle (or Right?) click ends the show
-                assert len(self.pic['line']) == self.peak_counter
-                assert self.cum_graph_present == len(self.sum_peak)
-                self.fig.canvas.mpl_disconnect(self.cid)
-                self.fig.canvas.mpl_disconnect(self.cid2)
-                self.pic['GL'] = [self.GL] * self.peak_counter
-                self.block = False
+            elif event.button !=1 and not event.step:
+                # On some computers middle and right click have both the value 3
+                self._draw_peak_sum()
+
+                if event.dblclick:
+                    print('kraj')
+                    # Double Middle (or Right?) click ends the show
+                    assert len(self.pic['line']) == self.peak_counter
+                    assert self.cum_graph_present == len(self.sum_peak)
+                    self.fig.canvas.mpl_disconnect(self.cid)
+                    self.fig.canvas.mpl_disconnect(self.cid2)
+                    self.pic['GL'] = [self.GL] * self.peak_counter
+                    self.block = False
