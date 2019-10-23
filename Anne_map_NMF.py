@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from read_WDF import convert_time, read_WDF
+from utilities import NavigationButtons
 import deconvolution
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
@@ -35,7 +36,7 @@ Third plot: the heatmap of the mixing coefficients
 # -----------------------Choose a file-----------------------------------------
 filename = 'Data/Anne/LE19266_lipp-static_x100_10s_P50_slicedepth1.wdf'
 initialization = {'SliceValues': [100, 1300],  # Use None to count all
-                  'NMF_NumberOfComponents': 4,
+                  'NMF_NumberOfComponents': 3,
                   'PCA_components': 12,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
@@ -99,144 +100,7 @@ else:
 
 _spectra1[_slice_to_exclude] = np.copy(spectra[_slice_replacement])
 
-# %%
-# =============================================================================
-#                  showing the raw spectra:
-# =============================================================================
-'''
-This part allows us to scan trough spectra in order to visualize each spectrum
-individualy
-'''
-# plt.close('all')
-figr, axr = plt.subplots()
-plt.subplots_adjust(bottom=0.2)
 
-_s = np.copy(spectra)
-_n_points = int(measure_params['Capacity'])
-_s.resize(_n_points, int(measure_params['PointsPerSpectrum']))
-l, = plt.plot(sigma, _s[0], lw=2)
-plt.show()
-
-
-class Index(object):
-    ind = 0
-
-    def next(self, event):
-        self.ind += 1
-        _i = self.ind % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-    def next10(self, event):
-        self.ind += 10
-        _i = self.ind % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-    def next100(self, event):
-        self.ind += 100
-        _i = self.ind % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-    def next1000(self, event):
-        self.ind += 1000
-        _i = self.ind % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-    def prev(self, event):
-        self.ind -= 1
-        _i = self.ind % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-    def prev10(self, event):
-        self.ind -= 10
-        _i = self.ind % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-    def prev100(self, event):
-        self.ind -= 100
-        _i = self.ind % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-    def prev1000(self, event):
-        self.ind -= 1000
-        _i = (self.ind) % _n_points
-        ydata = _s[_i]
-        l.set_ydata(ydata)
-        axr.relim()
-        axr.autoscale_view(None, False, True)
-        axr.set_title(f'spectrum number {_i}')
-        figr.canvas.draw()
-        figr.canvas.flush_events()
-
-
-callback = Index()
-
-axprev1000 = plt.axes([0.097, 0.05, 0.1, 0.04])
-axprev100 = plt.axes([0.198, 0.05, 0.1, 0.04])
-axprev10 = plt.axes([0.299, 0.05, 0.1, 0.04])
-axprev1 = plt.axes([0.4, 0.05, 0.1, 0.04])
-axnext1 = plt.axes([0.501, 0.05, 0.1, 0.04])
-axnext10 = plt.axes([0.602, 0.05, 0.1, 0.04])
-axnext100 = plt.axes([0.703, 0.05, 0.1, 0.04])
-axnext1000 = plt.axes([0.804, 0.05, 0.1, 0.04])
-
-bprev1000 = Button(axprev1000, 'Prev.1000')
-bprev1000.on_clicked(callback.prev1000)
-bprev100 = Button(axprev100, 'Prev.100')
-bprev100.on_clicked(callback.prev100)
-bprev10 = Button(axprev10, 'Prev.10')
-bprev10.on_clicked(callback.prev10)
-bprev = Button(axprev1, 'Prev.1')
-bprev.on_clicked(callback.prev)
-bnext = Button(axnext1, 'Next1')
-bnext.on_clicked(callback.next)
-bnext10 = Button(axnext10, 'Next10')
-bnext10.on_clicked(callback.next10)
-bnext100 = Button(axnext100, 'Next100')
-bnext100.on_clicked(callback.next100)
-bnext1000 = Button(axnext1000, 'Next1000')
-bnext1000.on_clicked(callback.next1000)
 
 # %%
 # =============================================================================
@@ -293,6 +157,7 @@ def baseline_als2(y, lam=10e4, p=10e-5, niter=12):
     w = p * (y > z) + (1-p) * (y < z)
   return z
 
+
 try:
     spectra_kept
 except NameError:
@@ -303,9 +168,30 @@ except NameError:
     sigma_kept = np.copy(sigma)
 
 
+baseline_22 = np.asarray([baseline_als2(y) for y in spectra_kept])
+
+y_without_bline = spectra_kept - baseline_22
+y_without_bline -= np.min(y_without_bline, axis=1)[:, np.newaxis]
+# %%
+# =============================================================================
+#                  showing the raw spectra:
+# =============================================================================
+'''
+This part allows us to scan trough spectra in order to visualize each spectrum
+individualy
+'''
+plt.close('all')
 
 
+_s = np.copy(spectra)
+_n_points = int(measure_params['Capacity'])
+_s.resize(_n_points, int(measure_params['PointsPerSpectrum']))
+multi_spectra = np.stack((spectra_kept, baseline_22, y_without_bline), axis=-1)
+see_all_spectra = NavigationButtons(sigma_kept, multi_spectra,
+                                    autoscale_y=True, title='LE19266')
+plt.show()
 
+spectra_kept = np.copy(y_without_bline)
 #%%
 # =============================================================================
 #                                     PCA...
@@ -346,7 +232,6 @@ _n_components = initialization['NMF_NumberOfComponents']
 # _end = time()
 # print(f'nmf done is {_end-_start:.3f}_s')
 # =============================================================================
-_n_components = 4
 nmf  = decomposition.NMF(_n_components,
                          init='nndsvda', alpha=0.006)
 mix = nmf.fit_transform(spectra_cleaned)
@@ -477,7 +362,7 @@ fig.suptitle('Heatmaps showing the abundance of individual components'
              'throughout the scanned area.')
 fig.canvas.mpl_connect('button_press_event', onclick)
 
-
+plt.show()
 # %%
 # =============================================================================
 #        saving some data for usage in other software (Origin, Excel..)

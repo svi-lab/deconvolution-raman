@@ -50,11 +50,12 @@ filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
 
 initialization = {'SliceValues': [100, 1300],  # Use None to count all
                   'NMF_NumberOfComponents': 6,
-                  'PCA_components': 12,
+                  'PCA_components': 40,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
-                  'NumberOfLinesToSkip_End': 0}
+                  'NumberOfLinesToSkip_End': 80,
+                  'BaselineRemoval': True}
 
 # Reading the data from the .wdf file
 measure_params, map_params, sigma, spectra, origins = read_WDF(filename,
@@ -89,7 +90,7 @@ else:
     raise SystemExit('not a map scan')
 
 if (initialization['NumberOfLinesToSkip_Beggining']
-        + initialization['NumberOfLinesToSkip_End']) > 0:
+        + initialization['NumberOfLinesToSkip_End']) > _n_y:
     raise SystemExit('You are skiping more lines than present in the scan.\n'
                      'Please revise your initialization parameters')
 
@@ -100,15 +101,15 @@ if (initialization['NumberOfLinesToSkip_Beggining']
 '''This part is quite laborious at this stage,
 you should be much better off if you eliminate the cosmic rays beforehand
 using WiRE'''
-_spectra1 = np.copy(spectra)
+_spectra_man_clean = np.copy(spectra)  # copy the original spectra
 
 # The next few lines serve to isolate case-to-case file-specific problems
 # in map scans:
 if filename == 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf':
-    _map_view = _spectra1.reshape(141, 141, -1)
+    _map_view = _spectra_man_clean.reshape(141, 141, -1)
     # patching the hole in the sample:
     _map_view[107:137, 131:141, :] = _map_view[107:137, 100:110, :]
-    _spectra1 = _map_view.reshape(_n_x*_n_y, -1)
+    _spectra_man_clean = _map_view.reshape(_n_x*_n_y, -1)
     _slice_to_exclude = slice(5217, 5499)  # two bad lines to exclude
     _slice_replacement = slice(4935, 5217)
 elif filename == 'Data/M1ANMap_Depth_2mm_.wdf':
@@ -142,28 +143,9 @@ else:
     _slice_to_exclude = slice(None)
     _slice_replacement = slice(None)
 
-_spectra1[_slice_to_exclude] = np.copy(spectra[_slice_replacement])
+_spectra_man_clean[_slice_to_exclude] = _spectra_man_clean[_slice_replacement]
+_n_points = int(measure_params['Capacity'])
 
-# %%
-# =============================================================================
-#                  showing the raw spectra:
-# =============================================================================
-'''
-This part allows us to scan trough spectra in order to visualize each spectrum
-individualy
-'''
-# plt.close('all')
-# =============================================================================
-# _sstart = time()
-# spectra2 = _spectra1 - np.asarray([baseline_als3(ss) for ss in _spectra1])
-# _send = time()
-# print(f"baseline removal done in {_send-_sstart:.3f}_s")
-# _s = np.copy(spectra2)
-# _n_points = int(measure_params['Capacity'])
-# _s.resize(_n_points, int(measure_params['PointsPerSpectrum']))
-# =============================================================================
-see_all_spectra = NavigationButtons(sigma, _s, autoscale_y=False,
-                                    title="My spectra", figsize=(12,12))
 # %%
 # =============================================================================
 #                               SLICING....
@@ -180,16 +162,16 @@ Wire settings or, if it'_s not done, remove those pixels here manually
 Furthermore, we sometimes want to perform the deconvolution only on a part
 of the spectra, so here you should define the part that interests you
 '''
+
 _slice_values = initialization['SliceValues']  # give your zone in cm-1
 
-if not _slice_values[0]:
-    _slice_values[0] = np.min(sigma)
-if not _slice_values[1]:
-    _slice_values[1] = np.max(sigma)
+assert _slice_values[0] < _slice_values[1], "Check your initialization Slices!"
 
 _condition = (sigma >= _slice_values[0]) & (sigma <= _slice_values[1])
-sigma_kept = np.copy(sigma[_condition])  # adding np.copy if needed
-spectra_kept = np.copy(_spectra1[:, _condition])
+sigma_kept = sigma[_condition]  # add np.copy if needed
+
+spectra_kept = _spectra_man_clean[:, _condition]
+
 
 _first_lines_to_skip = initialization['NumberOfLinesToSkip_Beggining']
 _last_lines_to_skip = initialization['NumberOfLinesToSkip_End']
@@ -206,23 +188,47 @@ _coordinates = origins.iloc[_start_pos:_end_pos, [_x_index+1, _y_index+1]]
 
 # %%
 # =============================================================================
+#                  showing the raw spectra
+#            (possibly with the baseline removal part)
+# =============================================================================
+'''
+Applying the baseline removal algorithm on each spectrum in _spectra_man_clean.
+This part can take some time (like ~ 30sec for 10000 spectra)
+We then use the class NavigationButtons to show everything:
+'''
+# plt.close('all')
+if initialization['BaselineRemoval']:
+    _sstart = time()
+    print('Starting the baseline substraction')
+    baselines = np.asarray([baseline_als3(ss) for ss in spectra_kept])
+    _spectra_wo_bline = spectra_kept - baselines
+    _spectra_wo_bline -= np.min(spectra_kept, axis=1)[:, np.newaxis]
+    _send = time()
+    print(f"baseline removal done in {_send-_sstart:.3f}_s")
+    _s = np.stack((spectra_kept, baselines, _spectra_wo_bline), axis=-1)
+#    _s.resize(_n_points, int(measure_params['PointsPerSpectrum']))
+    see_all_spectra = NavigationButtons(sigma, _s, autoscale_y=False,
+                                        title="My spectra", figsize=(12, 12))
+else:
+    _s = np.stack((spectra, spectra_kept), axis=-1)
+    see_all_spectra = NavigationButtons(sigma, _s, autoscale_y=False,
+                                        title="My spectra", figsize=(12, 12))
+
+# %%
+# =============================================================================
 #                                     PCA...
 # =============================================================================
-try:
-    spectra_kept
-except NameError:
-    spectra_kept = np.copy(spectra)
-try:
-    sigma_kept
-except NameError:
-    sigma_kept = np.copy(sigma)
+if initialization['BaselineRemoval']:
+    working_spectra = _spectra_wo_bline
+else:
+    working_spectra = spectra_kept
 
 pca = decomposition.PCA()
-pca_fit = pca.fit(spectra_kept)
+pca_fit = pca.fit(working_spectra)
 pca.n_components = min(initialization['PCA_components'],
                        _n_points,
                        len(sigma_kept))
-spectra_denoised = pca.fit_transform(spectra_kept)
+spectra_denoised = pca.fit_transform(working_spectra)
 spectra_denoised = pca.inverse_transform(spectra_denoised)
 spectra_cleaned = deconvolution.clean(sigma_kept, spectra_denoised,
                                       mode='area')
@@ -401,3 +407,9 @@ _save_components.index.name = 'Raman shift in cm-1'
 _save_components.to_csv(
         f"{_save_filename_folder}Components{_save_filename_extension}",
         sep=';')
+#%%
+pca_err = np.sum(spectra_kept - spectra_denoised, axis=1)
+pca_err.resize(_n_y, _n_x)
+plt.figure()
+sns.heatmap(pca_err)
+plt.show()
