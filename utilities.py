@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# %%
 """
 Created on Tue Jun 11 15:28:47 2019
 
@@ -165,11 +166,23 @@ class NavigationButtons(object):
         elif len(spectra.shape) == 3:
             self.s = spectra
         else:
-            raise ValueError('Check the shape of your spactra. It should be (n_spectra, n_points, n_curves)')
+            raise ValueError('Check the shape of your spectra. It should be (n_spectra, n_points, n_curves)')
         self.title = title
         self.sigma = sigma
+        if "Temp" in kwargs:
+            self.temp = kwargs.pop("Temp")
+            self.temp_ar = np.resize(self.temp, self.n_points)
+            self.title_ar = np.fromiter((self.title + ' : N°'+str(i)+
+                                         ', T='+
+                                         str(self.temp_ar[i]) for i in range(self.n_points)),
+                                        dtype='U50', count=self.n_points)
+        else:
+            self.Temp = 'unknown'
+            self.title_ar = np.char.add(self.title+' : N°',
+                                        np.arange(self.n_points).astype(str))
+
         self.figr, self.axr = plt.subplots(**kwargs)
-        self.axr.set_title(f'{title} : spectrum number 0')
+        self.axr.set_title(self.title_ar[0])
         self.figr.subplots_adjust(bottom=0.2)
         self.l = self.axr.plot(self.sigma, self.s[0], lw=2) # l potentially contains multiple lines
         self.axprev1000 = plt.axes([0.097, 0.05, 0.1, 0.04])
@@ -206,7 +219,7 @@ class NavigationButtons(object):
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(self.title_ar[_i])
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
@@ -218,7 +231,7 @@ class NavigationButtons(object):
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(self.title_ar[_i])
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
@@ -230,7 +243,7 @@ class NavigationButtons(object):
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(self.title_ar[_i])
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
@@ -242,7 +255,7 @@ class NavigationButtons(object):
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(self.title_ar[_i])
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
@@ -254,7 +267,7 @@ class NavigationButtons(object):
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(self.title_ar[_i])
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
@@ -266,7 +279,7 @@ class NavigationButtons(object):
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(self.title_ar[_i])
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
@@ -278,7 +291,7 @@ class NavigationButtons(object):
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(self.title_ar[_i])
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
@@ -290,7 +303,7 @@ class NavigationButtons(object):
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(self.title_ar[_i])
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
@@ -439,3 +452,65 @@ def fitonclick(event):
             fig.canvas.mpl_disconnect(cid2)
             plt.close()
             return
+
+
+# Williams' functions for Raman spectra:
+def long_correction(sigma, lambda_laser, T=30):
+    """
+    Function computing the Long correction factor according to Long
+    1977. This function can operate on numpy.ndarrays as well as on
+    simple numbers.
+
+    Parameters
+    ----------
+    sigma : numpy.ndarray
+        Wavenumber in cm-1
+    lambda_inc : float
+        Laser wavelength in nm.
+
+    Examples
+    --------
+    >>> sigma, i = deconvolution.acquire_data('my_raman_file.CSV')
+    >>> corrected_i = i * long_correction(sigma)
+    """
+    c = 2.998e10                          # cm/s
+    lambda_inc = lambda_laser * 1e-7      # cm
+    sigma_inc = 1. / lambda_inc           # cm-1
+    h = 6.63e-34                          # J.s
+    TK = 273.0 + T                        # K
+    kB = 1.38e-23                         # J/K
+    return (sigma_inc**3 * sigma / (sigma_inc - sigma)**4
+            * (1 - np.exp(-h*c*sigma/kB/TK)))
+
+# %%
+def clean(sigma, raw_spectra, mode='area'):
+    """
+    Cleans the spectra to remove abnormal ones, remove the baseline offset,
+    correct temperature & frequency effects, and make them comparable
+    by normalizing them according to their area or their maximum.
+
+    Parameters
+    ----------
+    sigma : numpy.ndarray
+        Wavenumber in cm-1
+    raw_spectra : numpy.ndarray, n_spectra * n_features
+        Input spectra
+    mode : {'area', 'max'}
+        Controls how spectra are normalized
+    delete : list of int, default None
+        Spectra that should be removed, eg outliers
+    long_cor : float, optional
+        Laser wavelength in nm. If given, then temperature-frequence correction
+        will be applied. If None or False, no correction is applied.
+    """
+    clean_spectra = np.copy(raw_spectra)
+    # Remove the offset
+    clean_spectra -= clean_spectra.min(axis=1)[:, np.newaxis]
+    # Normalize the spectra
+    if mode == 'max':
+        clean_spectra /= clean_spectra.max(axis=1)[:, np.newaxis]
+    elif mode == 'area':
+        clean_spectra /= np.trapz(clean_spectra)[:, np.newaxis]
+    else:
+        print('Normalization mode not understood; No normalization applied')
+    return clean_spectra

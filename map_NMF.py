@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from read_WDF import convert_time, read_WDF
-from utilities import NavigationButtons, baseline_als3
-import deconvolution
+from utilities import NavigationButtons, baseline_als3, clean
+#import deconvolution
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib import colors
@@ -44,22 +44,24 @@ Third plot: the heatmap of the mixing coefficients
 # filename = 'Data/M1ANMap_Depth_2mm_.wdf'
 # filename = 'Data/M1SCMap_depth_.wdf'
 # filename = 'Data/drop4.wdf'
-filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
+#filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
 #filename = 'Data/Anne/LE19266_lipp-static_x100_10s_P50_slicedepth1.wdf'
+filename = 'Data/DriffaTemperatureRamps/SiO2_pure_O20XLF_532nm_150cs_100p_4rampes_degaze_sousAr.wdf'
 
 
-initialization = {'SliceValues': [100, 1300],  # Use None to count all
+initialization = {'SliceValues': None,#[100, 1300],  # Use None to count all
                   'NMF_NumberOfComponents': 6,
-                  'PCA_components': 40,
+                  'PCA_components': 0.98,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
-                  'NumberOfLinesToSkip_End': 80,
-                  'BaselineRemoval': True}
+                  'NumberOfLinesToSkip_End': 0}
 
 # Reading the data from the .wdf file
 measure_params, map_params, sigma, spectra, origins = read_WDF(filename,
                                                                vebrose=True)
+
+_n_points = int(measure_params['Count'])
 '''
 "measure_params" is a dictionnary containing measurement parameters
 "map_params" is dictionnary containing map parameters
@@ -86,8 +88,14 @@ if measure_params['MeasurementType'] == 'Map':
     # X and Y regardless if one of them is Z in reality (for slices)
     _n_x, _n_y = map_params['NbSteps'][[_x_index, _y_index]]
     _s_x, _s_y = map_params['StepSizes'][[_x_index, _y_index]]
+elif measure_params['MeasurementType'] == 'Series':
+    temperature_serie = np.asarray(
+                        origins.Temperature)[:measure_params["Count"]].squeeze()
+    time_serie = np.asarray(origins.Time)[:measure_params["Count"]].squeeze()
+    timelaps_serie = (time_serie - time_serie[0]) * 1e-7 # in seconds
+    _n_x, _n_y = 1, measure_params["Count"]
 else:
-    raise SystemExit('not a map scan')
+    raise SystemExit("Can't yet handle this type of scan")
 
 if (initialization['NumberOfLinesToSkip_Beggining']
         + initialization['NumberOfLinesToSkip_End']) > _n_y:
@@ -144,7 +152,7 @@ else:
     _slice_replacement = slice(None)
 
 _spectra_man_clean[_slice_to_exclude] = _spectra_man_clean[_slice_replacement]
-_n_points = int(measure_params['Capacity'])
+
 
 # %%
 # =============================================================================
@@ -165,13 +173,16 @@ of the spectra, so here you should define the part that interests you
 
 _slice_values = initialization['SliceValues']  # give your zone in cm-1
 
-assert _slice_values[0] < _slice_values[1], "Check your initialization Slices!"
+if _slice_values:
+    assert _slice_values[0] < _slice_values[1], "Check your initialization Slices!"
 
-_condition = (sigma >= _slice_values[0]) & (sigma <= _slice_values[1])
-sigma_kept = sigma[_condition]  # add np.copy if needed
+    _condition = (sigma >= _slice_values[0]) & (sigma <= _slice_values[1])
+    sigma_kept = sigma[_condition]  # add np.copy if needed
 
-spectra_kept = _spectra_man_clean[:, _condition]
-
+    spectra_kept = _spectra_man_clean[:, _condition]
+else:
+    sigma_kept = sigma
+    spectra_kept = _spectra_man_clean
 
 _first_lines_to_skip = initialization['NumberOfLinesToSkip_Beggining']
 _last_lines_to_skip = initialization['NumberOfLinesToSkip_End']
@@ -184,53 +195,26 @@ else:
 
 spectra_kept = spectra_kept[_start_pos:_end_pos]
 
-_coordinates = origins.iloc[_start_pos:_end_pos, [_x_index+1, _y_index+1]]
 
-# %%
 # =============================================================================
-#                  showing the raw spectra
-#            (possibly with the baseline removal part)
+# ATTENTION: This next line is likely buggy. The columns containing the coor-
+# dinates are not necessarily the ones indicated with _x_index ans _y_index!
 # =============================================================================
-'''
-Applying the baseline removal algorithm on each spectrum in _spectra_man_clean.
-This part can take some time (like ~ 30sec for 10000 spectra)
-We then use the class NavigationButtons to show everything:
-'''
-# plt.close('all')
-if initialization['BaselineRemoval']:
-    _sstart = time()
-    print('Starting the baseline substraction')
-    baselines = np.asarray([baseline_als3(ss) for ss in spectra_kept])
-    _spectra_wo_bline = spectra_kept - baselines
-    _spectra_wo_bline -= np.min(spectra_kept, axis=1)[:, np.newaxis]
-    _send = time()
-    print(f"baseline removal done in {_send-_sstart:.3f}_s")
-    _s = np.stack((spectra_kept, baselines, _spectra_wo_bline), axis=-1)
-#    _s.resize(_n_points, int(measure_params['PointsPerSpectrum']))
-    see_all_spectra = NavigationButtons(sigma, _s, autoscale_y=False,
-                                        title="My spectra", figsize=(12, 12))
-else:
-    _s = np.stack((spectra, spectra_kept), axis=-1)
-    see_all_spectra = NavigationButtons(sigma, _s, autoscale_y=False,
-                                        title="My spectra", figsize=(12, 12))
+#_coordinates = origins.iloc[_start_pos:_end_pos, [_x_index+1, _y_index+1]]
+
 
 # %%
 # =============================================================================
 #                                     PCA...
 # =============================================================================
-if initialization['BaselineRemoval']:
-    working_spectra = _spectra_wo_bline
-else:
-    working_spectra = spectra_kept
-
 pca = decomposition.PCA()
-pca_fit = pca.fit(working_spectra)
+pca_fit = pca.fit(spectra_kept)
 pca.n_components = min(initialization['PCA_components'],
                        _n_points,
                        len(sigma_kept))
-spectra_denoised = pca.fit_transform(working_spectra)
+spectra_denoised = pca.fit_transform(spectra_kept)
 spectra_denoised = pca.inverse_transform(spectra_denoised)
-spectra_cleaned = deconvolution.clean(sigma_kept, spectra_denoised,
+spectra_cleaned = clean(sigma_kept, spectra_kept,
                                       mode='area')
 
 # %%
@@ -238,27 +222,23 @@ spectra_cleaned = deconvolution.clean(sigma_kept, spectra_denoised,
 #                                   NMF step
 # =============================================================================
 
+
 _n_components = initialization['NMF_NumberOfComponents']
+nmf_model = decomposition.NMF(n_components=_n_components, init='nndsvda')
 _start = time()
 print('starting nmf... (be patient, this may take some time...)')
-components, mix, nmf_reconstruction_error = \
-    deconvolution.nmf_step(spectra_cleaned, _n_components, init='nndsvda')
-# =============================================================================
-# _basic_mix = pd.DataFrame(
-#         np.copy(mix),
-#         columns=[f"mixing coeff. for the component {l}"
-#                  for l in np.arange(mix.shape[1])]
-#         )
-# =============================================================================
+mix = nmf_model.fit_transform(spectra_cleaned)
+components = nmf_model.components_
+reconstructed_spectra1 = nmf_model.inverse_transform(mix)
 _end = time()
-print(f'nmf done is {_end-_start:.3f}_s')
+print(f'nmf done in {_end - _start:.2f}s')
 
 # %%
 # =============================================================================
 #                    preparing the mixture coefficients
 # =============================================================================
 
-mix.resize(_n_x*_n_y, _n_components, )
+mix.resize((_n_x*_n_y).astype(int), _n_components, )
 
 mix = np.roll(mix, _start_pos, axis=0)
 _comp_area = np.empty(_n_components)
@@ -271,6 +251,15 @@ for _z in range(_n_components):
 spectra_reconstructed = np.dot(mix, components)
 _mix_reshaped = mix.reshape(_n_y, _n_x, _n_components)
 
+# %%
+# =============================================================================
+#                  showing the raw spectra
+# =============================================================================
+#baseline = np.apply_along_axis(baseline_als3, )
+_s = np.stack((spectra_cleaned, bebe, spectra_cleaned - bebe), axis=-1)
+see_all_spectra = NavigationButtons(sigma_kept, _s, autoscale_y=False,
+                                    title="My spectra", figsize=(12, 12),
+                                    Temp=temperature_serie)
 
 # %%
 # =============================================================================
