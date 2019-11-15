@@ -452,7 +452,7 @@ def fitonclick(event):
             plt.close()
             return
 
-
+# %%
 # Williams' functions for Raman spectra:
 def long_correction(sigma, lambda_laser, T=30):
     """
