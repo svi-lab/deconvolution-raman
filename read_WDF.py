@@ -76,7 +76,7 @@ def read_WDF(filename, vebrose=False):
     MAP_TYPES = {0: 'RandomPoints', 1: 'ColumnMajor', 2: 'Alternating',
                  3: 'LineFocusMapping', 4: 'InvertedRows',
                  5: 'InvertedColumns', 6: 'SurfaceProfile',
-                 7: 'XyLine', 128: 'Slice'}
+                 7: 'XyLine', 68: 'InvertedRows', 128: 'Slice'}
 
     MEASUREMENT_TYPES = ['Unspecified', 'Single', 'Series', 'Map']
 
@@ -177,8 +177,8 @@ def read_WDF(filename, vebrose=False):
     for i in gen:
         print_block_header(name, i)
         f.seek(b_off[i] + 16)
-    #    m_flag = _read(f)
-        map_params['MapAreaType'] = MAP_TYPES[_read(f)]
+        m_flag = _read(f)
+        map_params['MapAreaType'] = MAP_TYPES[m_flag]#_read(f)]
         _read(f)
         map_params['InitialCoordinates'] = np.round(_read(f, '<f', count=3),2)
         map_params['StepSizes'] = np.round(_read(f, '<f', count=3),2)
