@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# %%
 from read_WDF import convert_time, read_WDF
 from utilities import NavigationButtons, baseline_als3, clean
 #import deconvolution
@@ -14,14 +15,13 @@ from timeit import default_timer as time
 import pandas as pd
 import os
 sns.set()
-'''This script uses Williams' script of deconvolution read_WDF.py
+'''This script uses NMF deconvolution
 to produce some informative graphical output on map scans.
-ATTENTION: For the moment, the scripts works only on map scans
-(from binary .wdf files)
-All of the abovementioned scripts should be in your working directory
+ATTENTION: you are supposed to provide your spectra in .wdf files)
+All of the imported scripts should be in your working directory
 (maybe you need to add the __init__.py file in the same folder as well.
 You should first choose the data file with the map scan in the .wdf format
-(I could add later the input dialog)
+
 Set the initialization dictionary values
 That'_s it!
 First plot: your spectra (with navigation buttons)
@@ -46,12 +46,12 @@ Third plot: the heatmap of the mixing coefficients
 # filename = 'Data/drop4.wdf'
 #filename = 'Data/Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf'
 #filename = 'Data/Anne/LE19266_lipp-static_x100_10s_P50_slicedepth1.wdf'
-filename = 'Data/DriffaTemperatureRamps/SiO2_pure_O20XLF_532nm_150cs_100p_4rampes_degaze_sousAr.wdf'
-
+#filename = 'Data/DriffaTemperatureRamps/SiO2_pure_O20XLF_532nm_150cs_100p_4rampes_degaze_sousAr.wdf'
+filename = 'Data/Dejan/Echantillon_Anne/carto1.wdf'
 
 initialization = {'SliceValues': None,#[100, 1300],  # Use None to count all
                   'NMF_NumberOfComponents': 6,
-                  'PCA_components': 0.98,
+                  'PCA_components': 0.998,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
@@ -102,7 +102,7 @@ if (initialization['NumberOfLinesToSkip_Beggining']
     raise SystemExit('You are skiping more lines than present in the scan.\n'
                      'Please revise your initialization parameters')
 
-#%%
+# %%
 # =============================================================================
 #          Manually removing the Cosmic Rays on a file to file basis:
 # =============================================================================
@@ -159,16 +159,7 @@ _spectra_man_clean[_slice_to_exclude] = _spectra_man_clean[_slice_replacement]
 #                               SLICING....
 # =============================================================================
 '''
-One should always check if the spectra were recorded with the dead pixels
-included or not. It is a parameter which should be set at the spectrometer
-configuration (Contact Renishaw for assistance)
-As it turns out the first 10 and the last 16 pixels on the SVI Renishaw
-spectrometer detector are reserved, and no signal is ever recorded on those
-pixels by the detector. So we should either enter these parameters inside the
-Wire settings or, if it'_s not done, remove those pixels here manually
-
-Furthermore, we sometimes want to perform the deconvolution only on a part
-of the spectra, so here you should define the part that interests you
+To eliminate dead pixels or to isolate a part of the spectra
 '''
 
 _slice_values = initialization['SliceValues']  # give your zone in cm-1
@@ -214,7 +205,7 @@ pca.n_components = min(initialization['PCA_components'],
                        len(sigma_kept))
 spectra_denoised = pca.fit_transform(spectra_kept)
 spectra_denoised = pca.inverse_transform(spectra_denoised)
-spectra_cleaned = clean(sigma_kept, spectra_kept,
+spectra_cleaned = clean(sigma_kept, spectra_denoised,
                                       mode='area')
 
 # %%
@@ -256,7 +247,7 @@ _mix_reshaped = mix.reshape(_n_y, _n_x, _n_components)
 #                  showing the raw spectra
 # =============================================================================
 #baseline = np.apply_along_axis(baseline_als3, )
-_s = np.stack((spectra_cleaned, bebe, spectra_cleaned - bebe), axis=-1)
+_s = np.stack((spectra_kept, spectra_cleaned, spectra_reconstructed), axis=-1)
 see_all_spectra = NavigationButtons(sigma_kept, _s, autoscale_y=False,
                                     title="My spectra", figsize=(12, 12),
                                     Temp=temperature_serie)
@@ -396,7 +387,7 @@ _save_components.index.name = 'Raman shift in cm-1'
 _save_components.to_csv(
         f"{_save_filename_folder}Components{_save_filename_extension}",
         sep=';')
-#%%
+# %%
 pca_err = np.sum(spectra_kept - spectra_denoised, axis=1)
 pca_err.resize(_n_y, _n_x)
 plt.figure()
