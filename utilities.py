@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# %%
 """
 Created on Tue Jun 11 15:28:47 2019
 
@@ -156,34 +157,37 @@ class NavigationButtons(object):
     '''
     ind = 0
 
-    def __init__(self, sigma, spectra, autoscale_y=False, title='',
+    def __init__(self, sigma, spectra, autoscale_y=False, title='Spectra', label=False,
                  **kwargs):
         self.y_autoscale = autoscale_y
-        self.n_points = spectra.shape[0]
+        
         if len(spectra.shape) == 2:
             self.s = spectra[:,:, np.newaxis]
         elif len(spectra.shape) == 3:
             self.s = spectra
         else:
-            raise ValueError('Check the shape of your spactra. It should be (n_spectra, n_points, n_curves)')
-        self.title = title
-        self.sigma = sigma
-        if "Temp" in kwargs:
-            self.temp = kwargs.pop("Temp")
-            self.temp_ar = np.resize(self.temp, self.n_points)
-            self.title_ar = np.fromiter((self.title + ' : N°'+str(i)+
-                                         ', T='+
-                                         str(self.temp_ar[i]) for i in range(self.n_points)),
-                                        dtype='U50', count=self.n_points)
+            raise ValueError('Check the shape of your spectra. It should be (n_spectra, n_points, n_curves)')
+        self.n_spectra = self.s.shape[0]
+        if isinstance(title, list) or isinstance(title, np.ndarray):
+            self.title = title
         else:
-            self.Temp = 'unknown'
-            self.title_ar = np.char.add(self.title+' : N°',
-                                        np.arange(self.n_points).astype(str))
+            self.title = [title]*self.n_spectra
+            
+        self.sigma = sigma
+        if label:
+            if len(label)==self.s.shape[2]:
+                self.label = label
+            else:
+                print("You should check the length of your label list.\nFalling on to default labels...")
+                self.label = [str(numb) for numb in range(self.s.shape[2])]
+        else:
+            self.label = [str(numb) for numb in range(self.s.shape[2])]
 
         self.figr, self.axr = plt.subplots(**kwargs)
-        self.axr.set_title(f'{title} : spectrum number 0')
+        self.axr.set_title(f'{title[0]}')
         self.figr.subplots_adjust(bottom=0.2)
         self.l = self.axr.plot(self.sigma, self.s[0], lw=2) # l potentially contains multiple lines
+        self.axr.legend(self.l, self.label)
         self.axprev1000 = plt.axes([0.097, 0.05, 0.1, 0.04])
         self.axprev100 = plt.axes([0.198, 0.05, 0.1, 0.04])
         self.axprev10 = plt.axes([0.299, 0.05, 0.1, 0.04])
@@ -212,97 +216,97 @@ class NavigationButtons(object):
 
     def next1(self, event):
         self.ind += 1
-        _i = self.ind % self.n_points
+        _i = self.ind % self.n_spectra
         for ll in range(len(self.l)):
             yl = self.s[_i][:, ll]
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(f'{self.title[_i]}; N°{_i}')
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
     def next10(self, event):
         self.ind += 10
-        _i = self.ind % self.n_points
+        _i = self.ind % self.n_spectra
         for ll in range(len(self.l)):
             yl = self.s[_i][:, ll]
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(f'{self.title[_i]}; N°{_i}')
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
     def next100(self, event):
         self.ind += 100
-        _i = self.ind % self.n_points
+        _i = self.ind % self.n_spectra
         for ll in range(len(self.l)):
             yl = self.s[_i][:, ll]
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(f'{self.title[_i]}; N°{_i}')
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
     def next1000(self, event):
         self.ind += 1000
-        _i = self.ind % self.n_points
+        _i = self.ind % self.n_spectra
         for ll in range(len(self.l)):
             yl = self.s[_i][:, ll]
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(f'{self.title[_i]}; N°{_i}')
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
     def prev1(self, event):
         self.ind -= 1
-        _i = self.ind % self.n_points
+        _i = self.ind % self.n_spectra
         for ll in range(len(self.l)):
             yl = self.s[_i][:, ll]
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(f'{self.title[_i]}; N°{_i}')
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
     def prev10(self, event):
         self.ind -= 10
-        _i = self.ind % self.n_points
+        _i = self.ind % self.n_spectra
         for ll in range(len(self.l)):
             yl = self.s[_i][:, ll]
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(f'{self.title[_i]}; N°{_i}')
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
     def prev100(self, event):
         self.ind -= 100
-        _i = self.ind % self.n_points
+        _i = self.ind % self.n_spectra
         for ll in range(len(self.l)):
             yl = self.s[_i][:, ll]
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(f'{self.title[_i]}; N°{_i}')
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
     def prev1000(self, event):
         self.ind -= 1000
-        _i = (self.ind) % self.n_points
+        _i = (self.ind) % self.n_spectra
         for ll in range(len(self.l)):
             yl = self.s[_i][:, ll]
             self.l[ll].set_ydata(yl)
         self.axr.relim()
         self.axr.autoscale_view(None, False, self.y_autoscale)
-        self.axr.set_title(f'{self.title} : spectrum number {_i}')
+        self.axr.set_title(f'{self.title[_i]}; N°{_i}')
         self.figr.canvas.draw()
         self.figr.canvas.flush_events()
 
@@ -454,7 +458,7 @@ def fitonclick(event):
 
 # %%
 # Williams' functions for Raman spectra:
-def long_correction(sigma, lambda_laser, T=30):
+def long_correction(sigma, lambda_laser, T=30, T0=-273):
     """
     Function computing the Long correction factor according to Long
     1977. This function can operate on numpy.ndarrays as well as on
@@ -466,20 +470,30 @@ def long_correction(sigma, lambda_laser, T=30):
         Wavenumber in cm-1
     lambda_inc : float
         Laser wavelength in nm.
+    T : float
+        Actual temperature in °C
+    T0 : float
+        The temperature to which to make the correction in °C
+    Returns:
+    ----------
+    lcorr: numpy.ndarray of the same shape as sigma
 
     Examples
     --------
-    >>> sigma, i = deconvolution.acquire_data('my_raman_file.CSV')
-    >>> corrected_i = i * long_correction(sigma)
+    >>> sigma, spectra_i = deconvolution.acquire_data('my_raman_file.CSV')
+    >>> corrected_spectra = spectra_i * long_correction(sigma)
     """
     c = 2.998e10                          # cm/s
     lambda_inc = lambda_laser * 1e-7      # cm
     sigma_inc = 1. / lambda_inc           # cm-1
     h = 6.63e-34                          # J.s
     TK = 273.0 + T                        # K
+    T0K = 273.0 + T0                      # K
     kB = 1.38e-23                         # J/K
-    return (sigma_inc**3 * sigma / (sigma_inc - sigma)**4
-            * (1 - np.exp(-h*c*sigma/kB/TK)))
+    ss = sigma_inc / sigma
+    cc = h*c/kB
+    return (ss**3 / (ss - 1)**4
+            * (1 - np.exp(cc*sigma*(1/TK-1/T0K))))
 
 # %%
 def clean(sigma, raw_spectra, mode='area'):
