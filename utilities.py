@@ -6,9 +6,9 @@ Created on Tue Jun 11 15:28:47 2019
 
 @author: dejan
 """
-from inspect import signature
 import numpy as np
 import matplotlib.pyplot as plt
+from warnings import warn
 from matplotlib.cm import ScalarMappable
 from matplotlib import colors
 from matplotlib.widgets import Button
@@ -157,7 +157,7 @@ class NavigationButtons(object):
     '''
     ind = 0
 
-    def __init__(self, sigma, spectra, autoscale_y=False, title='Spectra', label=False,
+    def __init__(self, sigma, spectra, autoscale_y=False, title='Spectrum', label=False,
                  **kwargs):
         self.y_autoscale = autoscale_y
         
@@ -166,10 +166,16 @@ class NavigationButtons(object):
         elif len(spectra.shape) == 3:
             self.s = spectra
         else:
-            raise ValueError('Check the shape of your spectra. It should be (n_spectra, n_points, n_curves)')
+            raise ValueError("Check the shape of your spectra.\n"
+                             "It should be (n_spectra, n_points, n_curves)\n"
+                             "(this last dimension might be ommited if it's equal to one)")
         self.n_spectra = self.s.shape[0]
         if isinstance(title, list) or isinstance(title, np.ndarray):
-            self.title = title
+            if len(title) == spectra.shape[0]:
+                self.title = title
+            else:
+                raise ValueError(f"you have {len(title)} titles,\n"
+                                f"but you have {len(spectra)} spectra")
         else:
             self.title = [title]*self.n_spectra
             
@@ -178,15 +184,15 @@ class NavigationButtons(object):
             if len(label)==self.s.shape[2]:
                 self.label = label
             else:
-                print("You should check the length of your label list.\nFalling on to default labels...")
-                self.label = [str(numb) for numb in range(self.s.shape[2])]
+                warn("You should check the length of your label list.\nFalling on to default labels...")
+                self.label = ["Curve n°"+str(numb) for numb in range(self.s.shape[2])]
         else:
-            self.label = [str(numb) for numb in range(self.s.shape[2])]
+            self.label = ["Curve n°"+str(numb) for numb in range(self.s.shape[2])]
 
         self.figr, self.axr = plt.subplots(**kwargs)
         self.axr.set_title(f'{title[0]}')
         self.figr.subplots_adjust(bottom=0.2)
-        self.l = self.axr.plot(self.sigma, self.s[0], lw=2) # l potentially contains multiple lines
+        self.l = self.axr.plot(self.sigma, self.s[0], lw=2, alpha=0.7) # l potentially contains multiple lines
         self.axr.legend(self.l, self.label)
         self.axprev1000 = plt.axes([0.097, 0.05, 0.1, 0.04])
         self.axprev100 = plt.axes([0.198, 0.05, 0.1, 0.04])

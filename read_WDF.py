@@ -18,7 +18,7 @@ def convert_time(t):
 
     Example:
         >>>time_of_spectrum_recording =
-        [convert_time(x) for x in origins.iloc[:,4]]
+          [convert_time(x) for x in origins.iloc[:,4]]
 
         should give you the list with the times on which
         each specific spectrum was recorded
@@ -32,18 +32,19 @@ def read_WDF(filename, vebrose=False):
     and returns it in form of five variables
 
     Example:
-        >>>measure_params, map_params, x_values, spectra, origins =
-                                                            read_WDF(filename)
+         >>>spectra, x_values, params, map_params, origins =
+         read_WDF(filename)
 
     Input:
         filename: The complete (relative or absolute) path to the file
 
     Output:
-        measure_params: a dictionary containing measurement parameters
-        map_params:  a dictionary containing map parameters
-        x_values: a numpy array containing the raman shifts
         spectra: numpy array contaiing all the recorded spectra
-        origins: pandas dataframe containing the conditions of each recording.
+        x_values: a numpy array containing the raman shifts
+        params: a dictionary containing measurement parameters
+        map_params:  a dictionary containing map parameters
+        origins: pandas dataframe containing the conditions of each
+                 recording.
                  Note that it has triple column names
                  (label, data type, data units)
     '''
@@ -77,6 +78,7 @@ def read_WDF(filename, vebrose=False):
                  3: 'LineFocusMapping', 4: 'InvertedRows',
                  5: 'InvertedColumns', 6: 'SurfaceProfile',
                  7: 'XyLine', 68: 'InvertedRows', 128: 'Slice'}
+                # Remember to check this 68
 
     MEASUREMENT_TYPES = ['Unspecified', 'Single', 'Series', 'Map']
 
@@ -287,9 +289,9 @@ def read_WDF(filename, vebrose=False):
                     origin_values[set_n] = np.asarray(origin_values[set_n])
     if vebrose:
         print('\n\n\n')
-
-    return (params, map_params, x_values, spectra,
-            pd.DataFrame(origin_values.T,
-                         columns=[origin_labels,
-                                  origin_set_dtypes,
-                                  origin_set_units]))
+    origins = pd.DataFrame(origin_values.T,
+                        columns=[origin_labels,
+                                 origin_set_dtypes,
+                                 origin_set_units])
+    
+    return (spectra, x_values, params, map_params, origins)
