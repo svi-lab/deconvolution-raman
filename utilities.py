@@ -13,44 +13,27 @@ from matplotlib.cm import ScalarMappable
 from matplotlib import colors
 from matplotlib.widgets import Button
 from scipy import sparse
+from scipy.ndimage import median_filter
 from scipy.sparse.linalg import spsolve, inv
 
 
-def rolling_window(trt, window_size, ax=0):
-    '''Function to create the 1D rolling window of the given size, on the
-    given axis. The "window" is added as the new dimension to the input array,
-    this new dimension is set as the first (0) axis of the resulting array.
+def rolling_median(arr, w_size, ax=0, mode='nearest', *args):
+    '''Calculates the rolling median of an array
+    along the given axis on the given window size.
     Parameters:
-        trt:ndarray: input array
-        window_size:int: the size of the window, must be odd
-        ax:int: the axis you want to roll the window on
+    -------------
+        arr:ndarray: input array
+        w_size:int: the window size
+                    (should be less then the dimension along the given axis)
+        ax:int: the axis along which to calculate the rolling median
+        mode:str: to choose from ['reflect', 'constant', 'nearest', 'mirror', 'wrap']
+        see the docstring of ndimage.median_filter for details
     Returns:
-        ndarray of the shape (window_size,)+trt.shape
-    Example:
-        test = (np.arange(90)**2).reshape(9,10)
-    '''
-    assert window_size % 2 != 0, "Window size must be odd integer!"
-    ee = window_size//2
-    arr_shape = np.asarray(trt.shape)
-    # If we want the result to be of the same shape as input array,
-    # we have to expand the edges.
-    # Here, we just duplicate the edge values ee times
-    to_prepend = np.asarray([np.take(trt, 0, axis=ax).tolist()]*ee)
-    to_append = np.asarray([np.take(trt, -1, axis=ax).tolist()]*ee)
-    # Then we need to reshape so that the concatanation works well:
-    concat_shape = arr_shape
-    concat_shape[ax] = 1
-    to_prepend = to_prepend.reshape(tuple(concat_shape))
-    to_append = to_append.reshape(tuple(concat_shape))
-    # Concatenate:
-    a = np.concatenate((to_prepend, trt, to_append), axis=ax)
-    # Final shape (we are adding one new dimension at the beggining)
-    shape = (window_size,) + trt.shape
-    # that new axis will cycle trough the same values as the axis given with
-    # the ax parameter
-    strides = (trt.strides[ax],) + trt.strides
-    # Return thus created array:
-    return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
+    ------------
+        ndarray of same shape as the input array'''
+    shape = np.ones(np.ndim(arr), dtype=int)
+    shape[ax] = w_size
+    return median_filter(arr, size=shape, mode=mode, *args)
 
 
 def baseline_als3(y, lam=1e5, p=5e-5, niter=12):
@@ -570,3 +553,45 @@ def clean(sigma, raw_spectra, mode='area'):
     else:
         print('Normalization mode not understood; No normalization applied')
     return clean_spectra
+
+
+def rolling_window(trt, window_size, ax=0):
+    '''
+    NOTE: Due to usage of as_strided function from numpy.stride_tricks,
+          the results are sometimes unpredictible.
+          You have been warned :)
+    
+    Function to create the 1D rolling window of the given size, on the
+    given axis. The "window" is added as the new dimension to the input array,
+    this new dimension is set as the first (0) axis of the resulting array.
+    Parameters:
+        trt:ndarray: input array
+        window_size:int: the size of the window, must be odd
+        ax:int: the axis you want to roll the window on
+    Returns:
+        ndarray of the shape (window_size,)+trt.shape
+    Example:
+        test = (np.arange(90)**2).reshape(9,10)
+    '''
+    assert window_size % 2 != 0, "Window size must be odd integer!"
+    ee = window_size//2
+    arr_shape = np.asarray(trt.shape)
+    # If we want the result to be of the same shape as input array,
+    # we have to expand the edges.
+    # Here, we just duplicate the edge values ee times
+    to_prepend = np.asarray([np.take(trt, 0, axis=ax).tolist()]*ee)
+    to_append = np.asarray([np.take(trt, -1, axis=ax).tolist()]*ee)
+    # Then we need to reshape so that the concatanation works well:
+    concat_shape = arr_shape
+    concat_shape[ax] = 1
+    to_prepend = to_prepend.reshape(tuple(concat_shape))
+    to_append = to_append.reshape(tuple(concat_shape))
+    # Concatenate:
+    a = np.concatenate((to_prepend, trt, to_append), axis=ax)
+    # Final shape (we are adding one new dimension at the beggining)
+    shape = (window_size,) + trt.shape
+    # that new axis will cycle trough the same values as the axis given with
+    # the ax parameter
+    strides = (trt.strides[ax],) + trt.strides
+    # Return thus created array:
+    return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides, writeable=False)
