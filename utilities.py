@@ -16,6 +16,43 @@ from scipy import sparse
 from scipy.sparse.linalg import spsolve, inv
 
 
+def rolling_window(trt, window_size, ax=0):
+    '''Function to create the 1D rolling window of the given size, on the
+    given axis. The "window" is added as the new dimension to the input array,
+    this new dimension is set as the first (0) axis of the resulting array.
+    Parameters:
+        trt:ndarray: input array
+        window_size:int: the size of the window, must be odd
+        ax:int: the axis you want to roll the window on
+    Returns:
+        ndarray of the shape (window_size,)+trt.shape
+    Example:
+        test = (np.arange(90)**2).reshape(9,10)
+    '''
+    assert window_size % 2 != 0, "Window size must be odd integer!"
+    ee = window_size//2
+    arr_shape = np.asarray(trt.shape)
+    # If we want the result to be of the same shape as input array,
+    # we have to expand the edges.
+    # Here, we just duplicate the edge values ee times
+    to_prepend = np.asarray([np.take(trt, 0, axis=ax).tolist()]*ee)
+    to_append = np.asarray([np.take(trt, -1, axis=ax).tolist()]*ee)
+    # Then we need to reshape so that the concatanation works well:
+    concat_shape = arr_shape
+    concat_shape[ax] = 1
+    to_prepend = to_prepend.reshape(tuple(concat_shape))
+    to_append = to_append.reshape(tuple(concat_shape))
+    # Concatenate:
+    a = np.concatenate((to_prepend, trt, to_append), axis=ax)
+    # Final shape (we are adding one new dimension at the beggining)
+    shape = (window_size,) + trt.shape
+    # that new axis will cycle trough the same values as the axis given with
+    # the ax parameter
+    strides = (trt.strides[ax],) + trt.strides
+    # Return thus created array:
+    return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
+
+
 def baseline_als3(y, lam=1e5, p=5e-5, niter=12):
     '''Found on stackoverflow.
     Schematic explanaton of the params to
