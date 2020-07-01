@@ -4,6 +4,6 @@ other/*
 *_pycache*/
 *.pyc
 *ipynb*
-!
+!Map_NMF.ipynb
 testing_file_read.py
 utilities.py.orig
