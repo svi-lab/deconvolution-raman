@@ -4,5 +4,6 @@ other/*
 *_pycache*/
 *.pyc
 *ipynb*
+!
 testing_file_read.py
 utilities.py.orig

@@ -52,7 +52,7 @@ def find_barycentre(x, y, method="trapz_minimize"):
             # to make the other part be close to half
             to_minimize_dh = np.abs(part_down - half)
             return to_minimize_ud**2+to_minimize_uh+to_minimize_dh
-        
+
         def find_x(X0, xx=x, yy=y, method=method):
             part_left = np.trapz(yy[xx<=X0], x=xx[xx<=X0])
             part_right = np.trapz(yy[xx>=X0], x=xx[xx>=X0])
@@ -60,14 +60,14 @@ def find_barycentre(x, y, method="trapz_minimize"):
             to_minimize_lh = np.abs(part_left - half)
             to_minimize_rh = np.abs(part_right - half)
             return to_minimize_lr**2+to_minimize_lh+to_minimize_rh
-           
+
         minimized_y = minimize_scalar(find_y, method='Bounded',
                                     bounds=(np.quantile(y, 0.01), np.quantile(y, 0.99)))
         minimized_x = minimize_scalar(find_x, method='Bounded',
                                     bounds=(np.quantile(x, 0.01), np.quantile(x, 0.99)))
         y_value = minimized_y.x
         x_value = minimized_x.x
-           
+
     elif method == "list_minimize":
         ys = np.sort(yy)
         z2 = np.asarray(
@@ -124,7 +124,7 @@ def baseline_als(y, lam=1e5, p=5e-5, niter=12):
     ----------
         It takes around 2-3 sec per 1000 spectra with 10 iterations
         on i7 4cores(8threads) @1,9GHz
-    
+
     '''
     def _one_bl(yi, lam=lam, p=p, niter=niter, z=None):
         if z is None:
@@ -143,18 +143,18 @@ def baseline_als(y, lam=1e5, p=5e-5, niter=12):
     if y.ndim == 1:
         b_line = _one_bl(y)
     elif y.ndim == 2:
-        b_line = np.asarray(Parallel(n_jobs=-1)(delayed(_one_bl)(y[i]) for i in range(y.shape[0])))
+        b_line = np.asarray(Parallel(n_jobs=-1)(delayed(_one_bl)(y[i])
+                                                for i in range(y.shape[0])))
     else:
         warn("This only works for 1D or 2D arrays")
 
     return b_line
 
 
-def slice_lr(spectra, sigma="not set",
-                    pos_left="not set", pos_right="not set"):
+def slice_lr(spectra, sigma=None, pos_left=None, pos_right=None):
     '''
     Several reasons may make you want to apply the slicing.
-    
+
     a) Your spectra might have been recorded with the dead pixels included.
     It is normaly a parameter which should had been set at the spectrometer
     configuration (Contact your spectros's manufacturer for assistance)
@@ -162,7 +162,7 @@ def slice_lr(spectra, sigma="not set",
     interests you.
     c) You might have made a poor choice of the spectral range at the
        moment of recording the spectra.
-    
+
     Parameters:
     ---------------
     spectra: 2D ndarray: your spectra. Each row is one spectrum
@@ -178,35 +178,34 @@ def slice_lr(spectra, sigma="not set",
 
     Returns:
     ---------------
-    spectra_kept: 2D ndarray: your spectra containing only the zone of interest.
+    spectra_kept: 2D ndarray: your spectra containing only the zone of
+                              interest.
                               spectra_kept.shape[0] = spectra_shape[0]
                               spectra_kept.shape[1] <= spectra.shape[1]
     sigma_kept: 1D ndarray: if sigma is given: your Raman shift values for the
                             isolated zone. len(sigma_kept) <= len(sigma)
-                            if sigma is not given: indices of the zone of interest.
+                            if sigma is not given: indices of the zone of
+                            interest.
     '''
-    if isinstance(sigma, str):
-        if sigma == "not set":
-            sigma = np.arange(len(spectra))
-        else:
-            print("Your sigma should be numpy ndarray")
-    
-    
+
+    if sigma is None:
+        sigma = np.arange(len(spectra))
+
     # If you pass a negative number as the right position:
     if isinstance(pos_right, (int, float)):
         if pos_right < 0:
             pos_right = sigma[pos_right]
 
-    if (pos_left == "not set"):
-        pos_left = sigma[0]
-    if (pos_right == "not set"):
-        pos_right = sigma[-1]
-        
-    assert pos_left < pos_right, "Check your initialization Slices!"
+    if pos_left is None:
+        pos_left = sigma.min()
+    if pos_right is None:
+        pos_right = sigma.max()
+
+    assert pos_left <= pos_right, "Check your initialization Slices!"
     _condition = (sigma >= pos_left) & (sigma <= pos_right)
     sigma_kept = sigma[_condition]  # add np.copy if needed
     spectra_kept = np.asarray(spectra[:, _condition], order='C')
-        
+
     return spectra_kept, sigma_kept
 
 
@@ -328,7 +327,7 @@ class NavigationButtons(object):
     def __init__(self, sigma, spectra, autoscale_y=False, title='Spectrum', label=False,
                  **kwargs):
         self.y_autoscale = autoscale_y
-        
+
         if len(spectra.shape) == 2:
             self.s = spectra[:,:, np.newaxis]
         elif len(spectra.shape) == 3:
@@ -346,7 +345,7 @@ class NavigationButtons(object):
                                 f"but you have {len(spectra)} spectra")
         else:
             self.title = [title]*self.n_spectra
-            
+
         self.sigma = sigma
         if label:
             if len(label)==self.s.shape[2]:
@@ -708,7 +707,7 @@ def rolling_window(trt, window_size, ax=0):
     NOTE: Due to usage of as_strided function from numpy.stride_tricks,
           the results are sometimes unpredictible.
           You have been warned :)
-    
+
     Function to create the 1D rolling window of the given size, on the
     given axis. The "window" is added as the new dimension to the input array,
     this new dimension is set as the first (0) axis of the resulting array.
