@@ -26,7 +26,7 @@ def convert_time(t):
     return time.strftime('%c', time.gmtime((t/1e7-11644473600)))
 
 
-def read_WDF(filename, vebrose=False):
+def read_WDF(filename, verbose=False):
     '''
     Reads data from the binary .wdf file
     and returns it in form of five variables
@@ -39,14 +39,14 @@ def read_WDF(filename, vebrose=False):
         filename: The complete (relative or absolute) path to the file
 
     Output:
-        spectra: numpy array contaiing all the recorded spectra
-        x_values: a numpy array containing the raman shifts
-        params: a dictionary containing measurement parameters
-        map_params:  a dictionary containing map parameters
-        origins: pandas dataframe containing the conditions of each
-                 recording.
-                 Note that it has triple column names
-                 (label, data type, data units)
+        spectra:     numpy array contaiing all the recorded spectra
+        x_values:    numpy array containing the raman shifts
+        params:      dictionary containing measurement parameters
+        map_params:  dictionary containing map parameters
+        origins:     pandas dataframe containing the spatio-temporal
+                     coordinates of each recording.
+                     Note that it has triple column names
+                     (label, data type, data units)
     '''
 
     DATA_TYPES = ['Arbitrary', 'Spectral', 'Intensity',
@@ -89,7 +89,7 @@ def read_WDF(filename, vebrose=False):
 
     try:
         f = open(filename, "rb")
-        print(f'Reading the file: "{filename}"\n')
+        print(f'Reading the file: \"{filename.split("/")[-1]}\"\n')
     except IOError:
         raise IOError(f"File {filename} does not exist!")
 
@@ -108,8 +108,8 @@ def read_WDF(filename, vebrose=False):
         else:
             return np.fromfile(f, dtype=dtype, count=count)[0:count]
 
-    def print_block_header(name, i, vebrose=vebrose):
-        if vebrose:
+    def print_block_header(name, i, verbose=verbose):
+        if verbose:
             print(f"\n{' Block : '+ name + ' ':=^80s}\n"
                   f"size: {block_sizes[i]}, offset: {b_off[i]}")
 
@@ -163,7 +163,7 @@ def read_WDF(filename, vebrose=False):
         params['LaserWaveLength'] = np.round(10e6/_read(f, '<f'), 2)
         f.seek(240)
         params['Title'] = _read(f, '|S160').decode()
-    if vebrose:
+    if verbose:
         for key, val in params.items():
             print(f'{key:-<40s} : \t{val}')
         if nspectra != ncollected:
@@ -186,7 +186,7 @@ def read_WDF(filename, vebrose=False):
         map_params['StepSizes'] = np.round(_read(f, '<f', count=3),2)
         map_params['NbSteps'] = n_x,n_y,n_z = _read(f, np.uint32, count=3)
         map_params['LineFocusSize'] = _read(f)
-    if vebrose:
+    if verbose:
         for key, val in map_params.items():
             print(f'{key:-<40s} : \t{val}')
 
@@ -198,7 +198,7 @@ def read_WDF(filename, vebrose=False):
         f.seek(b_off[i] + 16)
         spectra = _read(f, '<f', count=data_points_count)\
             .reshape(ncollected, npoints)
-        if vebrose:
+        if verbose:
             print(f'{"The number of spectra":-<40s} : \t{spectra.shape[0]}')
             print(f'{"The number of points in each spectra":-<40s} : \t'
                   f'{spectra.shape[1]}')
@@ -209,7 +209,7 @@ def read_WDF(filename, vebrose=False):
                            else spectra[xx]
                            for xx in range(nspectra)]
                 spectra = np.asarray(spectra)
-                if vebrose:
+                if verbose:
                     print('*It seems your file was recorded using the'
                           '"Inverted Rows" scan type'
                           '(sometimes also reffered to as "Snake").\n '
@@ -226,7 +226,7 @@ def read_WDF(filename, vebrose=False):
         params['XlistDataType'] = DATA_TYPES[_read(f)]
         params['XlistDataUnits'] = DATA_UNITS[_read(f)]
         x_values = _read(f, '<f', count=npoints)
-    if vebrose:
+    if verbose:
         print(f"{'The shape of the x_values is':-<40s} : \t{x_values.shape}")
         print(f"*These are the \"{params['XlistDataType']}"
               f"\" recordings in \"{params['XlistDataUnits']}\" units")
@@ -245,11 +245,11 @@ def read_WDF(filename, vebrose=False):
         # in the recorded microscope image
         if y_values_count > 1:
             y_values = _read(f, '<f', count=y_values_count)
-            if vebrose:
+            if verbose:
                 print("There seem to be the image recorded as well")
                 print(f"{'Its size is':-<40s} : \t{y_values.shape}")
         else:
-            if vebrose:
+            if verbose:
                 print("*No image was recorded")
 
     name = 'ORGN'
@@ -287,7 +287,7 @@ def read_WDF(filename, vebrose=False):
                                             else origin_values[set_n][xx]
                                             for xx in range(nspectra)]
                     origin_values[set_n] = np.asarray(origin_values[set_n])
-    if vebrose:
+    if verbose:
         print('\n\n\n')
     origins = pd.DataFrame(origin_values.T,
                         columns=[origin_labels,

@@ -7,14 +7,78 @@ Created on Tue Jun 11 15:28:47 2019
 @author: dejan
 """
 import numpy as np
-import matplotlib.pyplot as plt
+from joblib import Parallel, delayed
 from warnings import warn
+import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib import colors
 from matplotlib.widgets import Button
 from scipy import sparse
-from scipy.ndimage import median_filter
 from scipy.sparse.linalg import spsolve, inv
+from scipy.ndimage import median_filter
+from scipy.optimize import minimize_scalar
+
+
+def find_barycentre(x, y, method="trapz_minimize"):
+    '''Calculates the index of the barycentre value.
+        Parameters:
+        ----------
+        x:1D ndarra: ndarray containing your raman shifts
+        y:1D ndarray: Ndarray containing your intensity (counts) values
+        method:string: only "trapz_minimize" for now
+        Returns:
+        ---------
+        (x_value, y_value): the coordinates of the barycentre
+        '''
+    assert(method in ['trapz_minimize'])#, 'sum_minimize', 'trapz_list'])
+    razlika = np.asarray(np.diff(x, append=x[-1]+x[1]-x[0]), dtype=np.float16)
+    #assert(np.all(razlika/razlika[np.random.randint(len(x))] == np.ones_like(x))),\
+    #"your points are not equidistant"
+    half = np.trapz(y, x=x)
+    #from scipy.interpolate import interp1d
+    #xx=np.linspace(x.min(), x.max(), 2*len(x))
+    #f = interp1d(x, y, kind='quadratic')
+    #yy = f(xx)
+    if method in 'trapz_minimize':
+        def find_y(Y0, xx=x, yy=y, method=method):
+            '''Internal function to minimize
+            depending on the method chosen'''
+            part_up = np.trapz(yy[yy>=Y0]-Y0, x=xx[yy>=Y0])
+            part_down = np.trapz(yy[yy<=Y0], x=xx[yy<=Y0])
+            # for the two parts to be the same
+            to_minimize_ud = np.abs(part_up - part_down)
+            # fto make the other part be close to half
+            to_minimize_uh = np.abs(part_up - half)
+            # to make the other part be close to half
+            to_minimize_dh = np.abs(part_down - half)
+            return to_minimize_ud**2+to_minimize_uh+to_minimize_dh
+        
+        def find_x(X0, xx=x, yy=y, method=method):
+            part_left = np.trapz(yy[xx<=X0], x=xx[xx<=X0])
+            part_right = np.trapz(yy[xx>=X0], x=xx[xx>=X0])
+            to_minimize_lr = np.abs(part_left - part_right)
+            to_minimize_lh = np.abs(part_left - half)
+            to_minimize_rh = np.abs(part_right - half)
+            return to_minimize_lr**2+to_minimize_lh+to_minimize_rh
+           
+        minimized_y = minimize_scalar(find_y, method='Bounded',
+                                    bounds=(np.quantile(y, 0.01), np.quantile(y, 0.99)))
+        minimized_x = minimize_scalar(find_x, method='Bounded',
+                                    bounds=(np.quantile(x, 0.01), np.quantile(x, 0.99)))
+        y_value = minimized_y.x
+        x_value = minimized_x.x
+           
+    elif method == "list_minimize":
+        ys = np.sort(yy)
+        z2 = np.asarray(
+            [np.abs(np.trapz(yy[yy<=y_val], x=xx[yy<=y_val]) -\
+                    np.trapz(yy[yy>=y_val]-y_val, x=xx[yy>=y_val]))\
+             for y_val in ys])
+        y_value = ys[np.argmin(z2)]
+        x_ind = np.argmin(np.abs(np.cumsum(yy) - np.sum(yy)/2)) + 1
+        x_value = xx[x_ind]
+
+    return x_value, y_value
 
 
 def rolling_median(arr, w_size, ax=0, mode='nearest', *args):
@@ -36,34 +100,114 @@ def rolling_median(arr, w_size, ax=0, mode='nearest', *args):
     return median_filter(arr, size=shape, mode=mode, *args)
 
 
-def baseline_als3(y, lam=1e5, p=5e-5, niter=12):
-    '''Found on stackoverflow.
-    Schematic explanaton of the params to
-    get the "feel" of how the algo works:
+
+def baseline_als(y, lam=1e5, p=5e-5, niter=12):
+    '''Adapted from:
+    https://stackoverflow.com/questions/29156532/python-baseline-correction-library.
+    To get the feel on how the algorithm works, you can think of it as
+    if the rolling ball which comes from beneath the spectrum determins
+    the baseline.
+    Then, to follow the image, schematic explanaton of the params would be:
     Params:
-        y: your spectrum on which to find the baseline
-        lam: can be viewed as the radius of the ball
-        p: can be viewed as the measure of how much the ball
+    ----------
+        y:1D or 2D ndarray: the spectra on which to find the baseline
+        lam:number: can be viewed as the radius of the ball
+        p:number: can be viewed as the measure of how much the ball
             can penetrate into the spectra from below
-        niter: number of iterations
-            (the resulting baseline should stabilize after
-            some number of iterations)
+        niter:int: number of iterations
+                (the resulting baseline should stabilize after
+                some number of iterations)
     Returns:
-        z: the baseline
-    ---------------------------------------------
-    For more info, see the discussion on:
-    https://stackoverflow.com/questions/29156532/python-baseline-correction-library'''
-    L = len(y)
-    D = sparse.diags([1, -2, 1], [0, -1, -2], shape=(L, L-2))
-    D = lam * D.dot(D.transpose()) # Precompute this term since it does not depend on `w`
-    w = np.ones(L)
-    W = sparse.spdiags(w, 0, L, L)
-    for i in range(niter):
-        W.setdiag(w) # Do not create a new matrix, just update diagonal values
-        Z = W + D
-        z = spsolve(Z, w*y)
-        w = p * (y > z) + (1-p) * (y < z)
-    return z
+    -----------
+        b_line:ndarray: the baseline (same shape as y)
+    Note:
+    ----------
+        It takes around 2-3 sec per 1000 spectra with 10 iterations
+        on i7 4cores(8threads) @1,9GHz
+    
+    '''
+    def _one_bl(yi, lam=lam, p=p, niter=niter, z=None):
+        if z is None:
+            L = yi.shape[-1]
+            D = sparse.diags([1, -2, 1], [0, -1, -2], shape=(L, L-2))
+            D = lam * D.dot(D.transpose()) # Precompute this term since it does not depend on `w`
+            w = np.ones(L)
+            W = sparse.spdiags(w, 0, L, L)
+        for i in range(niter):
+            W.setdiag(w) # Do not create a new matrix, just update diagonal values
+            Z = W + D
+            z = spsolve(Z, w*yi)
+            w = p * (yi > z) + (1-p) * (yi < z)
+        return z
+
+    if y.ndim == 1:
+        b_line = _one_bl(y)
+    elif y.ndim == 2:
+        b_line = np.asarray(Parallel(n_jobs=-1)(delayed(_one_bl)(y[i]) for i in range(y.shape[0])))
+    else:
+        warn("This only works for 1D or 2D arrays")
+
+    return b_line
+
+
+def slice_lr(spectra, sigma="not set",
+                    pos_left="not set", pos_right="not set"):
+    '''
+    Several reasons may make you want to apply the slicing.
+    
+    a) Your spectra might have been recorded with the dead pixels included.
+    It is normaly a parameter which should had been set at the spectrometer
+    configuration (Contact your spectros's manufacturer for assistance)
+    b) You might want to isolate only a part of the spectra which
+    interests you.
+    c) You might have made a poor choice of the spectral range at the
+       moment of recording the spectra.
+    
+    Parameters:
+    ---------------
+    spectra: 2D ndarray: your spectra. Each row is one spectrum
+                         recorded at given position
+    sigma: 1D ndarray: your Raman shifts. Default is None, meaning
+                       that the slicing will be applied based on the
+                       indices of spectra, not Raman shift values
+    pos_left :int or float: position from which to start the slice. If sigma
+                      is given, pos_left is the lower Raman shift value,
+                      if not, it's the lower index of the spectra.
+    pos-right:int or float: same as for pos_left, but on the right side.
+                            It can be negative (means you count from the end)
+
+    Returns:
+    ---------------
+    spectra_kept: 2D ndarray: your spectra containing only the zone of interest.
+                              spectra_kept.shape[0] = spectra_shape[0]
+                              spectra_kept.shape[1] <= spectra.shape[1]
+    sigma_kept: 1D ndarray: if sigma is given: your Raman shift values for the
+                            isolated zone. len(sigma_kept) <= len(sigma)
+                            if sigma is not given: indices of the zone of interest.
+    '''
+    if isinstance(sigma, str):
+        if sigma == "not set":
+            sigma = np.arange(len(spectra))
+        else:
+            print("Your sigma should be numpy ndarray")
+    
+    
+    # If you pass a negative number as the right position:
+    if isinstance(pos_right, (int, float)):
+        if pos_right < 0:
+            pos_right = sigma[pos_right]
+
+    if (pos_left == "not set"):
+        pos_left = sigma[0]
+    if (pos_right == "not set"):
+        pos_right = sigma[-1]
+        
+    assert pos_left < pos_right, "Check your initialization Slices!"
+    _condition = (sigma >= pos_left) & (sigma <= pos_right)
+    sigma_kept = sigma[_condition]  # add np.copy if needed
+    spectra_kept = np.asarray(spectra[:, _condition], order='C')
+        
+    return spectra_kept, sigma_kept
 
 
 def pV(x, h=30, x0=0, w=10, factor=0.5):
@@ -153,11 +297,14 @@ class NavigationButtons(object):
     -------------------
     Parameters:
         sigma: 1D numpy array of your x-values (raman shifts, par ex.)
-        spectra: 3D ndarray of shape (n_spectra, len(sigma), n_curves)
+        spectra: 3D or 2D ndarray of shape (n_spectra, len(sigma), n_curves).
+                 The last dimension may be ommited it there is only one curve
+                 to be plotted for each spectra),
         autoscale: bool determining if you want to adjust the scale to each spectrum
         title: The initial title describing where the spectra comes from
+        label: list: A list explaining each of the curves. len(label) = n_curves
     Output:
-        matplotlib graph with navigation buttons to cycle trought spectra
+        matplotlib graph with navigation buttons to cycle through spectra
     Example:
     # Let's say you have a ndarray containing 10 spectra, each 500 points long
     # base_spectras.shape should give (10, 500)
@@ -174,6 +321,7 @@ class NavigationButtons(object):
     # At the end, you stack all of this in one ndarray :
     >>>multiple_curves_to_plot = np.stack((
             base_spectras, spectra_fitted, G1, G2, G3), axis=-1)
+    >>>NavigationButtons(sigma, multiple_curves_to_plot)
     '''
     ind = 0
 
