@@ -41,9 +41,9 @@ Third plot: the heatmap of the mixing coefficients
 '''
 #%%
 # -----------------------Choose a file-----------------------------------------
-filename = 'Data/Sirine/carto - 2h_Copy.wdf'
+filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
 
-initialization = {'SliceValues': None,  # [100, 1300],  # Use None to count all
+initialization = {'SliceValues': [160, 1250],  # Use None to count all
                   'NMF_NumberOfComponents': 6,
                   'PCA_components': 0.998,
                   # Put in the int number from 0 to _n_y:
@@ -52,7 +52,7 @@ initialization = {'SliceValues': None,  # [100, 1300],  # Use None to count all
                   'NumberOfLinesToSkip_End': 0,
                   'BaselineCorrection': True,
                   'CosmicRayCorrection': True,
-                  'AbsoluteScale': False}  # what type of colorbar to use
+                  'AbsoluteScale': True}  # what type of colorbar to use
 
 # Reading the data from the .wdf file
 spectra, sigma, params, map_params, origins =\
@@ -179,7 +179,7 @@ spectra_kept = spectra_kept[_start_pos:_end_pos]
 # Finding the baseline using the asynchronous least squares method
 # =============================================================================
 if initialization['BaselineCorrection']:
-    b_line = baseline_als(spectra_kept, p=0.01, lam=1e8)
+    b_line = baseline_als(spectra_kept, p=1e-4, lam=1e5)
 else:
     b_line = np.zeros_like(spectra_kept)
 
@@ -218,10 +218,11 @@ if len(CR_cand_ind) > 0:
     _ss = np.stack((spectra_kept[CR_cand_ind],
                     corrected_spectra[CR_cand_ind],
                     med_spectra_x[CR_cand_ind]), axis=-1)
-    NavigationButtons(sigma_kept, _ss, autoscale_y=True, title=titles,
-                      label=['original',
-                             'baseline corrected',
-                             'median correction of CR']);
+    check_CR_candidates = NavigationButtons(sigma_kept, _ss, autoscale_y=True,
+                                            title=titles,
+                                            label=['original',
+                                                   'baseline corrected',
+                                                   'median correction of CR']);
 
     # Apply the correction:
     # (just replace the whole spectra containing the cosmic ray
