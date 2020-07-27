@@ -9,12 +9,11 @@ Created on Tue Jun 11 15:28:47 2019
 import numpy as np
 from joblib import Parallel, delayed
 from warnings import warn
-import matplotlib.pyplot as plt
-from matplotlib.cm import ScalarMappable
-from matplotlib import colors
-from matplotlib.widgets import Button
+import matplotlib as mpl
+from matplotlib import pyplot as plt
+from matplotlib.widgets import Slider, Button, RadioButtons
+from cycler import cycler
 from scipy import sparse
-from scipy.sparse.linalg import spsolve, inv
 from scipy.ndimage import median_filter
 from scipy.optimize import minimize_scalar
 
@@ -136,7 +135,7 @@ def baseline_als(y, lam=1e5, p=5e-5, niter=12):
         for i in range(niter):
             W.setdiag(w) # Do not create a new matrix, just update diagonal values
             Z = W + D
-            z = spsolve(Z, w*yi)
+            z = sparse.linalg.spsolve(Z, w*yi)
             w = p * (yi > z) + (1-p) * (yi < z)
         return z
 
@@ -189,7 +188,7 @@ def slice_lr(spectra, sigma=None, pos_left=None, pos_right=None):
     '''
 
     if sigma is None:
-        sigma = np.arange(len(spectra))
+        sigma = np.arange(spectra.shape[-1])
 
     # If you pass a negative number as the right position:
     if isinstance(pos_right, (int, float)):
@@ -287,7 +286,67 @@ def create_map_spectra(x=np.arange(150, 250, 0.34), initial_peak_params=[171, 20
     return spectra
 # %%
 
+class see_all_maps(object):
+    
+    def __init__(self, map_spectra, sigma=None, **kwargs):
+        self.map_spectra = map_spectra
+        if sigma is None:
+            self.sigma = np.arange(map_spectra.shape[-1])
+        else:
+            assert map_spectra.shape[-1] == len(sigma), "Check your Ramans shifts array"
+            self.sigma = sigma
+        
+        self.fig, self.ax = plt.subplots()
+        plt.subplots_adjust(left=0.1, bottom=0.2)
+        self.first_frame = 0
+        self.last_frame = len(self.sigma)-1
+        self.l = plt.imshow(self.map_spectra[:,:,0])
+        self.ax.set_title(f"Raman shift = {self.sigma[0]:.1f}cm⁻¹")
 
+        self.axcolor = 'lightgoldenrodyellow'
+        self.axframe = plt.axes([0.15, 0.1, 0.7, 0.03], facecolor=self.axcolor)
+
+
+        self.sframe = Slider(self.axframe, 'Frame',
+                             self.first_frame, self.last_frame,
+                             valinit=self.first_frame, valfmt='%d', valstep=1)
+
+        self.cbax,_ = mpl.colorbar.make_axes(self.ax)#plt.axes([0.77, 0.2, 0.03, 0.68])
+        self.my_cbar = mpl.colorbar.colorbar_factory(self.cbax, self.l)
+        
+        self.sframe.on_changed(self.update) # calls the above function when changing the slider position
+        # Calling the above function on keypress event
+        # (only arrow keys left and right work)
+        self.fig.canvas.mpl_connect('key_press_event', self.press)
+        plt.show()
+        
+    def update(self, val):
+        '''This function is for using the slider to scroll through frames'''
+        frame = int(self.sframe.val)
+        img = map_spectra[:,:,frame]
+        self.l.set_data(img)
+        self.l.set_clim((img.min(), img.max()))
+        self.ax.set_title(f"Raman shift = {self.sigma[frame]:.1f}cm⁻¹")
+        self.fig.canvas.draw_idle()
+
+    def press(self, event):
+        '''This function is to use arrow keys left and right to scroll
+        through frames one by one'''
+        frame = int(sframe.val)
+        if event.key == 'left' and frame > 1:
+            new_frame = frame - 1
+        elif event.key == 'right' and frame < len(sigma)-1:
+            new_frame = frame + 1
+        else:
+            new_frame = frame
+        self.sframe.set_val(new_frame)
+        img = self.map_spectra[:,:,new_frame]
+        self.l.set_data(img)
+        self.l.set_clim((img.min(), img.max()))
+        self.ax.set_title(f"Raman shift = {self.sigma[new_frame]:.1f}cm⁻¹")
+        self.fig.canvas.draw_idle()
+
+# %%
 
 class NavigationButtons(object):
     '''This class allows you to visualize multispectral data and
