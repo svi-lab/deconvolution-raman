@@ -17,7 +17,7 @@ from tkinter import filedialog, Tk, messagebox
 from timeit import default_timer as time
 from read_WDF import convert_time, read_WDF
 from utilities import NavigationButtons, clean, rolling_median,\
-slice_lr, baseline_als
+                        slice_lr, baseline_als
 #import deconvolution
 
 sns.set()
@@ -49,9 +49,9 @@ initialization = {'SliceValues': [160, 1250],  # Use None to count all
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
-                  'NumberOfLinesToSkip_End': 0,
-                  'BaselineCorrection': True,
-                  'CosmicRayCorrection': True,
+                  'NumberOfLinesToSkip_End': 6,
+                  'BaselineCorrection': False,
+                  'CosmicRayCorrection': False,
                   'AbsoluteScale': True}  # what type of colorbar to use
 
 # Reading the data from the .wdf file
@@ -151,7 +151,7 @@ spectra_kept, sigma_kept = slice_lr(spectra, sigma,
 
 # Removing the lines from top and/or bottom of the map
 try:
-    skip_lines_up = initialization['NumberOfLinesToSkip_End']
+    skip_lines_up = initialization['NumberOfLinesToSkip_Beggining']
 except (ValueError, KeyError):
     skip_lines_up = 0
 _start_pos = skip_lines_up * _n_x
@@ -218,10 +218,8 @@ check_baseline = NavigationButtons(sigma_kept, _baseline_stack,
 #                 and correcting them with median filter...
 # =============================================================================
 if initialization['CosmicRayCorrection']:
-    clf = LocalOutlierFactor(n_neighbors=5, n_jobs=-1, contamination=1e-5)
-    clf.offset_ = -10
-    prd = clf.fit_predict(corrected_spectra.reshape(_n_x, _n_y,-1))
-    CR_cand_ind2 = np.where(clf.negative_outlier_factor_<-10)
+    clf = LocalOutlierFactor(n_neighbors=5, n_jobs=-1)
+    prd = clf.fit_predict(corrected_spectra)
     CR_cand_ind = np.where(prd == -1)[0]
 else:
     CR_cand_ind = np.asarray([])
