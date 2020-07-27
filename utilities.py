@@ -9,12 +9,11 @@ Created on Tue Jun 11 15:28:47 2019
 import numpy as np
 from joblib import Parallel, delayed
 from warnings import warn
-import matplotlib.pyplot as plt
-from matplotlib.cm import ScalarMappable
-from matplotlib import colors
-from matplotlib.widgets import Button
+import matplotlib as mpl
+from matplotlib import pyplot as plt
+from matplotlib.widgets import Slider, Button, RadioButtons
+from cycler import cycler
 from scipy import sparse
-from scipy.sparse.linalg import spsolve, inv
 from scipy.ndimage import median_filter
 from scipy.optimize import minimize_scalar
 
@@ -136,7 +135,7 @@ def baseline_als(y, lam=1e5, p=5e-5, niter=12):
         for i in range(niter):
             W.setdiag(w) # Do not create a new matrix, just update diagonal values
             Z = W + D
-            z = spsolve(Z, w*yi)
+            z = sparse.linalg.spsolve(Z, w*yi)
             w = p * (yi > z) + (1-p) * (yi < z)
         return z
 
@@ -189,7 +188,7 @@ def slice_lr(spectra, sigma=None, pos_left=None, pos_right=None):
     '''
 
     if sigma is None:
-        sigma = np.arange(len(spectra))
+        sigma = np.arange(spectra.shape[-1])
 
     # If you pass a negative number as the right position:
     if isinstance(pos_right, (int, float)):
