@@ -22,7 +22,7 @@ def find_barycentre(x, y, method="trapz_minimize"):
     '''Calculates the index of the barycentre value.
         Parameters:
         ----------
-        x:1D ndarra: ndarray containing your raman shifts
+        x:1D ndarray: ndarray containing your raman shifts
         y:1D ndarray: Ndarray containing your intensity (counts) values
         method:string: only "trapz_minimize" for now
         Returns:
@@ -30,10 +30,10 @@ def find_barycentre(x, y, method="trapz_minimize"):
         (x_value, y_value): the coordinates of the barycentre
         '''
     assert(method in ['trapz_minimize'])#, 'sum_minimize', 'trapz_list'])
-    razlika = np.asarray(np.diff(x, append=x[-1]+x[1]-x[0]), dtype=np.float16)
+    razlika = np.asarray(np.diff(x, append=x[-1]+x[-1]-x[-2]), dtype=np.float16)
     #assert(np.all(razlika/razlika[np.random.randint(len(x))] == np.ones_like(x))),\
     #"your points are not equidistant"
-    half = np.trapz(y, x=x)
+    half = np.trapz(y, x=x)/2
     #from scipy.interpolate import interp1d
     #xx=np.linspace(x.min(), x.max(), 2*len(x))
     #f = interp1d(x, y, kind='quadratic')
@@ -42,7 +42,9 @@ def find_barycentre(x, y, method="trapz_minimize"):
         def find_y(Y0, xx=x, yy=y, method=method):
             '''Internal function to minimize
             depending on the method chosen'''
+            # Calculate the area of the curve above the Y0 value:
             part_up = np.trapz(yy[yy>=Y0]-Y0, x=xx[yy>=Y0])
+            # Calculate the area below Y0:
             part_down = np.trapz(yy[yy<=Y0], x=xx[yy<=Y0])
             # for the two parts to be the same
             to_minimize_ud = np.abs(part_up - part_down)
@@ -61,9 +63,11 @@ def find_barycentre(x, y, method="trapz_minimize"):
             return to_minimize_lr**2+to_minimize_lh+to_minimize_rh
 
         minimized_y = minimize_scalar(find_y, method='Bounded',
-                                    bounds=(np.quantile(y, 0.01), np.quantile(y, 0.99)))
+                                    bounds=(np.quantile(y, 0.01),
+                                            np.quantile(y, 0.99)))
         minimized_x = minimize_scalar(find_x, method='Bounded',
-                                    bounds=(np.quantile(x, 0.01), np.quantile(x, 0.99)))
+                                    bounds=(np.quantile(x, 0.01),
+                                            np.quantile(x, 0.99)))
         y_value = minimized_y.x
         x_value = minimized_x.x
 
@@ -103,22 +107,35 @@ def rolling_median(arr, w_size, ax=0, mode='nearest', *args):
 def baseline_als(y, lam=1e5, p=5e-5, niter=12):
     '''Adapted from:
     https://stackoverflow.com/questions/29156532/python-baseline-correction-library.
+    
     To get the feel on how the algorithm works, you can think of it as
-    if the rolling ball which comes from beneath the spectrum determins
+    if the rolling ball which comes from beneath the spectrum and thus sets
     the baseline.
+    
     Then, to follow the image, schematic explanaton of the params would be:
+    
     Params:
     ----------
-        y:1D or 2D ndarray: the spectra on which to find the baseline
-        lam:number: can be viewed as the radius of the ball
-        p:number: can be viewed as the measure of how much the ball
-            can penetrate into the spectra from below
-        niter:int: number of iterations
-                (the resulting baseline should stabilize after
-                some number of iterations)
+        y:          1D or 2D ndarray: the spectra on which to find the baseline
+        
+        lam:number: Can be viewed as the radius of the ball.
+                    As a rule of thumb, this value should be around the
+                    twice the width of the broadest feature you want to keep
+                    (width is to be measured in number of points, since
+                    for the moment no x values are taken into accound
+                    in this algorithm)
+                    
+        p:number:   Can be viewed as the measure of how much the ball
+                    can penetrate into the spectra from below
+                    
+        niter:int:  number of iterations
+                   (the resulting baseline should stabilize after
+                    some number of iterations)
+                    
     Returns:
     -----------
         b_line:ndarray: the baseline (same shape as y)
+        
     Note:
     ----------
         It takes around 2-3 sec per 1000 spectra with 10 iterations
@@ -164,8 +181,8 @@ def slice_lr(spectra, sigma=None, pos_left=None, pos_right=None):
 
     Parameters:
     ---------------
-    spectra: 2D ndarray: your spectra. Each row is one spectrum
-                         recorded at given position
+    spectra: N-D ndarray: your spectra. The last dimension is corresponds
+                          to one spectrum recorded at given position
     sigma: 1D ndarray: your Raman shifts. Default is None, meaning
                        that the slicing will be applied based on the
                        indices of spectra, not Raman shift values
@@ -177,12 +194,14 @@ def slice_lr(spectra, sigma=None, pos_left=None, pos_right=None):
 
     Returns:
     ---------------
-    spectra_kept: 2D ndarray: your spectra containing only the zone of
+    spectra_kept: N-D ndarray: your spectra containing only the zone of
                               interest.
-                              spectra_kept.shape[0] = spectra_shape[0]
-                              spectra_kept.shape[1] <= spectra.shape[1]
+                              spectra_kept.shape[:-1] = spectra_shape[:-1]
+                              spectra_kept.shape[-1] <= spectra.shape[-1]
     sigma_kept: 1D ndarray: if sigma is given: your Raman shift values for the
-                            isolated zone. len(sigma_kept) <= len(sigma)
+                            isolated zone.
+                            len(sigma_kept)=spectra_kept.shape[-1] <= 
+                            len(sigma)=spectra.shape[-1]
                             if sigma is not given: indices of the zone of
                             interest.
     '''
@@ -203,7 +222,7 @@ def slice_lr(spectra, sigma=None, pos_left=None, pos_right=None):
     assert pos_left <= pos_right, "Check your initialization Slices!"
     _condition = (sigma >= pos_left) & (sigma <= pos_right)
     sigma_kept = sigma[_condition]  # add np.copy if needed
-    spectra_kept = np.asarray(spectra[:, _condition], order='C')
+    spectra_kept = np.asarray(spectra[..., _condition], order='C')
 
     return spectra_kept, sigma_kept
 
