@@ -42,15 +42,16 @@ Third plot: the heatmap of the mixing coefficients
 #%%
 # -----------------------Choose a file-----------------------------------------
 filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
+#filename = '/media/dejan/chloe/IBN950E-532nm-obj20-p100-carto-LiveTrack-1.wdf'
 
-initialization = {'SliceValues': [160, 1250],  # Use None to count all
+initialization = {'SliceValues': [500, 1600],  # Use None to count all
                   'NMF_NumberOfComponents': 6,
-                  'PCA_components': 0.998,
+                  'PCA_components': 31,#0.998,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
-                  'NumberOfLinesToSkip_End': 6,
-                  'BaselineCorrection': False,
+                  'NumberOfLinesToSkip_End': 0,
+                  'BaselineCorrection': True,
                   'CosmicRayCorrection': False,
                   'AbsoluteScale': True}  # what type of colorbar to use
 
@@ -181,15 +182,31 @@ pca = decomposition.PCA(n_components=initialization['PCA_components'])
 pca_fit = pca.fit(spectra_kept)
 
 spectra_reduced = pca_fit.transform(spectra_kept)
+# the next line removes the share of the first component from each spectrum:
+pca_way = spectra_kept - np.outer(spectra_reduced[:,0], pca_fit.components_[0])
+pca_way -= np.min(pca_way, axis=-1)[:, np.newaxis]
+
+spectra_reduced = pca.fit_transform(pca_way)
 spectra_denoised = pca_fit.inverse_transform(spectra_reduced)
+
+pca_err = np.sum(np.abs(spectra_kept - spectra_denoised), axis=1)
+pca_err.resize(_n_yy, _n_x)
+plt.figure()
+sns.heatmap(np.log(1+pca_err))
+plt.show()
+plt.title("Checking the reconstruction error from PCA denoising")
+
+#%%
 
 # =============================================================================
 #                  showing the smoothed spectra
 # =============================================================================
 
-_s = np.stack((spectra_kept, spectra_denoised), axis=-1)
+_s = np.stack((spectra_kept - np.min(spectra_kept, axis=-1)[:, np.newaxis],
+               spectra_denoised), axis=-1)
 see_all_spectra = NavigationButtons(sigma_kept, _s, autoscale_y=True,
-                                    label=["corrected spectra", "pca denoised"],
+                                    label=["original spectra - offset",
+                                           "pca denoised - 1st component"],
                                     figsize=(12, 12))
 
 #%%
@@ -197,16 +214,21 @@ see_all_spectra = NavigationButtons(sigma_kept, _s, autoscale_y=True,
 # Finding the baseline using the asynchronous least squares method
 # =============================================================================
 if initialization['BaselineCorrection']:
-    b_line = baseline_als(spectra_denoised, p=1e-4, lam=1e4)
+    _start = time()
+    print("starting the baseline correction..."
+          f"\n(be patient, this may take some time...)")
+    b_line = baseline_als(spectra_denoised)#, p=1e-3, lam=1e3)
+    _end = time()
+    print(f"baseline correction done in {_end - _start:.2f}s")
 else:
     b_line = np.zeros_like(spectra_denoised)
-
+#%%
 # Remove the eventual offsets:
-corrected_spectra = spectra_denoised - b_line
-corrected_spectra -= np.min(corrected_spectra, axis=1)[:, np.newaxis]
+b_corr_spectra = spectra_denoised - b_line
+b_corr_spectra -= np.min(b_corr_spectra, axis=1)[:, np.newaxis]
 
 # Visualise the baseline correction:
-_baseline_stack = np.stack((spectra_denoised, b_line, corrected_spectra),
+_baseline_stack = np.stack((spectra_denoised, b_line, b_corr_spectra),
                            axis=-1)
 labels = ['original spectra', 'baseline', 'baseline corrected spectra']
 check_baseline = NavigationButtons(sigma_kept, _baseline_stack,
@@ -214,41 +236,41 @@ check_baseline = NavigationButtons(sigma_kept, _baseline_stack,
 
 # %%
 # =============================================================================
-#               Finding the Cosmic Rays with nearest neghbour
+#               Finding the Cosmic Rays with nearest neighbour
 #                 and correcting them with median filter...
 # =============================================================================
+corrected_spectra = np.copy(b_corr_spectra)
 if initialization['CosmicRayCorrection']:
-    clf = LocalOutlierFactor(n_neighbors=5, n_jobs=-1)
-    prd = clf.fit_predict(corrected_spectra)
+    clf = LocalOutlierFactor(n_neighbors=5, n_jobs=-1, contamination=0.001)
+    prd = clf.fit_predict(spectra_denoised)
     CR_cand_ind = np.where(prd == -1)[0]
-else:
-    CR_cand_ind = np.asarray([])
 
-if len(CR_cand_ind) > 0:
-    # Find the median value for each spectra, but only with regard to
-    # its' neighbours from the same line
-    med_spectra_x = rolling_median(
-                        corrected_spectra.reshape(_n_yy, _n_x, len(sigma_kept)),
-                        w_size=5, ax=1,
-                        mode='mirror').reshape((-1, len(sigma_kept)))
-
-    titles = [f"candidate from Nearest Neighbour\noriginal spectra N°{i} "
-              for i in np.nditer(CR_cand_ind)]
-    _ss = np.stack((spectra_denoised[CR_cand_ind],
-                    b_line[CR_cand_ind],
-                    corrected_spectra[CR_cand_ind],
-                    med_spectra_x[CR_cand_ind]), axis=-1)
-    check_CR_candidates = NavigationButtons(sigma_kept, _ss, autoscale_y=True,
-                                            title=titles,
-                                            label=['original denoised',
-                                                   'baseline',
-                                                   'baseline corrected',
-                                                   'median correction of CR']);
-
-    # Apply the correction:
-    # (just replace the whole spectra containing the cosmic ray
-    # with the median spectra of its' neighborhood)
     if len(CR_cand_ind) > 0:
+        # Find the median value for each spectra, but only with regard to
+        # its' neighbours from the same line
+        med_spectra_x = rolling_median(
+                            b_corr_spectra.reshape(_n_yy, _n_x, len(sigma_kept)),
+                            w_size=5, ax=1,
+                            mode='mirror').reshape((-1, len(sigma_kept)))
+
+        titles = [f"candidate from Nearest Neighbour\noriginal spectra N°{i} "
+                  for i in np.nditer(CR_cand_ind)]
+        _ss = np.stack((spectra_kept[CR_cand_ind],
+                        spectra_denoised[CR_cand_ind],
+                        b_line[CR_cand_ind],
+                        b_corr_spectra[CR_cand_ind],
+                        med_spectra_x[CR_cand_ind]), axis=-1)
+        check_CR_candidates = NavigationButtons(sigma_kept, _ss, autoscale_y=True,
+                                                title=titles,
+                                                label=['original spectra',
+                                                       'denoised spectra',
+                                                       'baseline',
+                                                       'baseline corrected',
+                                                       'median correction of CR']);
+
+        # Apply the correction:
+        # (just replace the whole spectra containing the cosmic ray
+        # with the median spectra of its' neighborhood)
         corrected_spectra[CR_cand_ind] = med_spectra_x[CR_cand_ind]
 
 # %%
@@ -256,7 +278,7 @@ if len(CR_cand_ind) > 0:
 #                                   NMF step
 # =============================================================================
 
-spectra_cleaned = clean(sigma_kept, spectra_denoised, mode='area')
+spectra_cleaned = clean(sigma_kept, corrected_spectra, mode='area')
 
 _n_components = initialization['NMF_NumberOfComponents']
 nmf_model = decomposition.NMF(n_components=_n_components, init='nndsvda',
@@ -440,10 +462,11 @@ _save_components.index.name = 'Raman shift in cm-1'
 _save_components.to_csv(
         f"{_save_filename_folder}Components{_save_filename_extension}",
         sep=';')
-# %%
-pca_err = np.sum(np.abs(corrected_spectra - reconstructed_spectra1), axis=1)
-pca_err.resize(_n_y, _n_x)
-plt.figure()
-sns.heatmap(clf.negative_outlier_factor_.reshape(_n_x, _n_y))
-plt.show()
-plt.title("Checking the reconstruction error from NMF")
+#%%
+als_way = spectra_kept - b_line
+als_way -= np.min(als_way, axis=-1)[:, np.newaxis]
+pca_way = spectra_kept - np.outer(spectra_reduced[:,0], pca.components_[0]) # ovo daje udio prve komponente u svakom spektru
+pca_way -= np.min(pca_way, axis=-1)[:, np.newaxis]
+
+usporedba = np.stack((als_way, pca_way), axis=-1)
+t_see = NavigationButtons(sigma_kept, usporedba, autoscale_y=True, label=["als", "pca"])
