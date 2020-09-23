@@ -42,7 +42,7 @@ Third plot: the heatmap of the mixing coefficients
 #%%
 # -----------------------Choose a file-----------------------------------------
 filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
-#filename = '/media/dejan/chloe/IBN950E-532nm-obj20-p100-carto-LiveTrack-1.wdf'
+filename = 'Data/M1ANMap_Depth_2mm_.wdf'
 
 initialization = {'SliceValues': [500, 1600],  # Use None to count all
                   'NMF_NumberOfComponents': 6,
@@ -178,10 +178,22 @@ spectra_kept = spectra_kept[_start_pos:_end_pos]
 # =============================================================================
 #                                     PCA...
 # =============================================================================
-pca = decomposition.PCA(n_components=initialization['PCA_components'])
+pca = decomposition.PCA(n_components=15, whiten=True)#initialization['PCA_components'])
 pca_fit = pca.fit(spectra_kept)
 
 spectra_reduced = pca_fit.transform(spectra_kept)
+spectra_denoised = pca_fit.inverse_transform(spectra_reduced)
+
+razlika = np.sum(np.partition((spectra_kept - spectra_denoised)**2, -20,
+                              axis=-1)[:,-20:], axis=-1)
+CR_cand_ind = prdac1#np.argpartition(razlika, -20)[-20:]
+
+_ss = np.stack((spectra_kept[CR_cand_ind],
+                spectra_denoised[CR_cand_ind]), axis=-1)
+check_CR_candidates = NavigationButtons(sigma_kept, _ss, autoscale_y=True,
+                                        label=['original spectra',
+                                               'denoised spectra']);
+#%%
 # the next line removes the share of the first component from each spectrum:
 pca_way = spectra_kept - np.outer(spectra_reduced[:,0], pca_fit.components_[0])
 pca_way -= np.min(pca_way, axis=-1)[:, np.newaxis]
@@ -240,9 +252,11 @@ check_baseline = NavigationButtons(sigma_kept, _baseline_stack,
 #                 and correcting them with median filter...
 # =============================================================================
 corrected_spectra = np.copy(b_corr_spectra)
-if initialization['CosmicRayCorrection']:
-    clf = LocalOutlierFactor(n_neighbors=5, n_jobs=-1, contamination=0.001)
-    prd = clf.fit_predict(spectra_denoised)
+if True:#initialization['CosmicRayCorrection']:
+    clf = LocalOutlierFactor(n_neighbors=5, n_jobs=-1,
+                             algorithm="ball_tree", leaf_size=8,
+                             contamination=2/_n_points)
+    prd = clf.fit_predict(spectra_denoised.reshape(_n_yy, _n_x, -1))
     CR_cand_ind = np.where(prd == -1)[0]
 
     if len(CR_cand_ind) > 0:
