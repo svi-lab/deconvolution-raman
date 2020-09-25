@@ -107,35 +107,35 @@ def rolling_median(arr, w_size, ax=0, mode='nearest', *args):
 def baseline_als(y, lam=1e5, p=5e-5, niter=12):
     '''Adapted from:
     https://stackoverflow.com/questions/29156532/python-baseline-correction-library.
-    
+
     To get the feel on how the algorithm works, you can think of it as
     if the rolling ball which comes from beneath the spectrum and thus sets
     the baseline.
-    
+
     Then, to follow the image, schematic explanaton of the params would be:
-    
+
     Params:
     ----------
         y:          1D or 2D ndarray: the spectra on which to find the baseline
-        
+
         lam:number: Can be viewed as the radius of the ball.
                     As a rule of thumb, this value should be around the
                     twice the width of the broadest feature you want to keep
                     (width is to be measured in number of points, since
                     for the moment no x values are taken into accound
                     in this algorithm)
-                    
+
         p:number:   Can be viewed as the measure of how much the ball
                     can penetrate into the spectra from below
-                    
+
         niter:int:  number of iterations
                    (the resulting baseline should stabilize after
                     some number of iterations)
-                    
+
     Returns:
     -----------
         b_line:ndarray: the baseline (same shape as y)
-        
+
     Note:
     ----------
         It takes around 2-3 sec per 1000 spectra with 10 iterations
@@ -200,7 +200,7 @@ def slice_lr(spectra, sigma=None, pos_left=None, pos_right=None):
                               spectra_kept.shape[-1] <= spectra.shape[-1]
     sigma_kept: 1D ndarray: if sigma is given: your Raman shift values for the
                             isolated zone.
-                            len(sigma_kept)=spectra_kept.shape[-1] <= 
+                            len(sigma_kept)=spectra_kept.shape[-1] <=
                             len(sigma)=spectra.shape[-1]
                             if sigma is not given: indices of the zone of
                             interest.
@@ -306,7 +306,7 @@ def create_map_spectra(x=np.arange(150, 250, 0.34), initial_peak_params=[171, 20
 # %%
 
 class AllMaps(object):
-    
+
     def __init__(self, map_spectra, sigma=None, first_frame=None, last_frame=None, **kwargs):
         self.map_spectra = map_spectra
         if sigma is None:
@@ -314,7 +314,7 @@ class AllMaps(object):
         else:
             assert map_spectra.shape[-1] == len(sigma), "Check your Ramans shifts array"
             self.sigma = sigma
-        
+
         self.fig, self.ax = plt.subplots()
         plt.subplots_adjust(left=0.1, bottom=0.2)
         if first_frame is None:
@@ -327,7 +327,7 @@ class AllMaps(object):
         else:
             assert isinstance(last_frame, int), "last_frame should be int"
             self.last_frame = last_frame
-            
+
         self.l = plt.imshow(self.map_spectra[:,:,0])
         self.l.set_clim(np.percentile(self.map_spectra[:,:,0], [1,99]))
         self.ax.set_title(f"Raman shift = {self.sigma[0]:.1f}cm⁻¹")
@@ -342,13 +342,13 @@ class AllMaps(object):
 
         self.cbax,_ = mpl.colorbar.make_axes(self.ax)#plt.axes([0.77, 0.2, 0.03, 0.68])
         self.my_cbar = mpl.colorbar.colorbar_factory(self.cbax, self.l)
-        
+
         self.sframe.on_changed(self.update) # calls the "update" function when changing the slider position
         # Calling the "press" function on keypress event
         # (only arrow keys left and right work)
         self.fig.canvas.mpl_connect('key_press_event', self.press)
         plt.show()
-        
+
     def update(self, val):
         '''This function is for using the slider to scroll through frames'''
         frame = int(self.sframe.val)
@@ -719,7 +719,7 @@ def fitonclick(event):
 
 # %%
 # Williams' functions for Raman spectra:
-def long_correction(sigma, lambda_laser, T=30, T0=-273):
+def long_correction(sigma, lambda_laser, T=30, T0=0):
     """
     Function computing the Long correction factor according to Long
     1977. This function can operate on numpy.ndarrays as well as on
