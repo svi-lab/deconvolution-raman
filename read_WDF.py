@@ -77,8 +77,9 @@ def read_WDF(filename, verbose=False):
     MAP_TYPES = {0: 'RandomPoints', 1: 'ColumnMajor', 2: 'Alternating',
                  3: 'LineFocusMapping', 4: 'InvertedRows',
                  5: 'InvertedColumns', 6: 'SurfaceProfile',
-                 7: 'XyLine', 68: 'InvertedRows', 128: 'Slice'}
-                # Remember to check this 68
+                 7: 'XyLine', 68: 'InvertedRows', 128: 'Slice',
+                 64: 'Autofocus? (check with Chloe)'}
+                # Remember to check this 68 and 64
 
     MEASUREMENT_TYPES = ['Unspecified', 'Single', 'Series', 'Map']
 
@@ -293,5 +294,5 @@ def read_WDF(filename, verbose=False):
                         columns=[origin_labels,
                                  origin_set_dtypes,
                                  origin_set_units])
-    
+
     return (spectra, x_values, params, map_params, origins)
