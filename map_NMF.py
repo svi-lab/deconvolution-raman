@@ -17,7 +17,7 @@ from tkinter import filedialog, Tk, messagebox
 from timeit import default_timer as time
 from read_WDF import convert_time, read_WDF
 from utilities import NavigationButtons, clean, rolling_median,\
-                        slice_lr, baseline_als
+                        slice_lr, baseline_als, AllMaps
 #import deconvolution
 
 sns.set()
@@ -41,32 +41,25 @@ Third plot: the heatmap of the mixing coefficients
 '''
 #%%
 # -----------------------Choose a file-----------------------------------------
-root_dir = "Data/Maxime/Cartos plaques/"
-file_set = set()
 
-for dir_, _, files in os.walk(root_dir):
-    for file_name in files:
-        if file_name[-3:] == 'wdf' and 'mm' in file_name[-7:-4]:
-            rel_dir = os.path.relpath(dir_, root_dir)
-            if 'map_depth' in rel_dir.split('/'):
-                rel_file = os.path.join(rel_dir, file_name)
-                file_set.add(root_dir+rel_file)
+folder_name = "./Data/Maxime/Cartos plaques/"
+file_n = "M1C0/map_depth/M1C0_Map_Reflex_7x7cm_depth2mm_1.wdf"
+filename = folder_name + file_n
 
-filename = sorted(file_set)[4]
-
-initialization = {'SliceValues': [160, 1400],  # Use None to count all
+initialization = {'SliceValues': [350, 1300],  # Use None to count all
                   'NMF_NumberOfComponents': 6,
-                  'PCA_components': 31,#0.998,
+                  'PCA_components': 21,#0.998,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
                   'NumberOfLinesToSkip_End': 0,
-                  'BaselineCorrection': False,
+                  'BaselineCorrection': True,
                   'CosmicRayCorrection': True, # Nearest neighbour method
                    # To use only in maps where step sizes are smaller then
                    # Sample's feature sizes (oversampled maps)
-                  'AbsoluteScale': False}  # what type of colorbar to use
-
+                  'AbsoluteScale': False,
+                  "save_data": False}# what type of colorbar to use
+#%%
 # Reading the data from the .wdf file
 spectra, sigma, params, map_params, origins =\
                             read_WDF(filename, verbose=True)
@@ -90,7 +83,7 @@ spectra, sigma, params, map_params, origins =\
     you can use the imported "convert_time" function_
 '''
 
-see_all_spectra = NavigationButtons(sigma, spectra, autoscale_y=True)
+
 
 #%%
 # put the retreived number of measurements in a variable
@@ -187,20 +180,50 @@ spectra_kept = spectra_kept[_start_pos:_end_pos]
 # =============================================================================
 #_coordinates = origins.iloc[_start_pos:_end_pos, [_x_index+1, _y_index+1]]
 
+see_all_spectra = NavigationButtons(sigma, spectra, autoscale_y=True)
 
+see_all_maps = AllMaps((np.log(1+spectra)).reshape(_n_yy, _n_x, -1),
+                       sigma=sigma)#, title="raw spectra (log_scale)")
+plt.suptitle("raw spectra (log_scale)")
 
+#%%
+# =============================================================================
+# Finding the baseline using the asynchronous least squares method
+# =============================================================================
+if initialization['BaselineCorrection']:
+    _start = time()
+    print("starting the baseline correction..."
+          f"\n(be patient, this may take some time...)")
+    b_line = baseline_als(spectra_kept, p=1e-3, lam=100*len(sigma_kept))
+    _end = time()
+    print(f"baseline correction done in {_end - _start:.2f}s")
+    # Remove the eventual offsets:
+    b_corr_spectra = spectra_kept - b_line
+    b_corr_spectra -= np.min(b_corr_spectra, axis=1)[:, np.newaxis]
 
+    # Visualise the baseline correction:
+    _baseline_stack = np.stack((spectra_kept, b_line, b_corr_spectra),
+                               axis=-1)
+    labels = ['original spectra', 'baseline', 'baseline corrected spectra']
+    check_baseline = NavigationButtons(sigma_kept, _baseline_stack,
+                                       autoscale_y=True, label=labels)
+    see_baseline_map = AllMaps(b_line.reshape(_n_yy, _n_x, -1),
+                               sigma=sigma_kept)
+    plt.suptitle("baseline")
+else:
+    b_corr_spectra = spectra_kept - np.min(spectra_kept, axis=-1, keepdims=True)
 
 
 # %%
 # =============================================================================
 #                                 CR correction...
 # =============================================================================
-# remove only the offset
-mock_sp3 = np.copy(spectra_kept - np.min(spectra_kept, axis=-1, keepdims=True))
-# a bit higher then median:
-scaling_koeff = np.quantile(mock_sp3, 0.6, axis=-1, keepdims=True)
-mock_sp3 /= scaling_koeff
+
+mock_sp3 = b_corr_spectra
+# a bit higher then median, or the area:
+#scaling_koeff = np.quantile(mock_sp3, 0.6, axis=-1, keepdims=True)
+scaling_koeff = np.trapz(mock_sp3, x=sigma_kept, axis=-1)[:, np.newaxis]
+mock_sp3 /= np.abs(scaling_koeff)
 normalized_spectra = np.copy(mock_sp3)
 # construct the footprint pointing to the pixels surrounding any given pixel:
 kkk = np.zeros((2*(_n_x+1) + 1, 1))
@@ -220,11 +243,12 @@ coarsing_diff = (mock_sp3 - median_spectra3)
 # plt.show()
 # =============================================================================
 if initialization['CosmicRayCorrection']:
+    print("starting the cosmic ray correction")
     # find the highest differences between the spectra and its neighbours:
     bad_neighbour = np.quantile(coarsing_diff, 0.99, axis=-1)
     # The find the spectra where the bad neighbour is very bad:
-    # The "very bad" limit is set here at 25*standard deviation (why not?):
-    basic_candidates = np.nonzero(coarsing_diff > 25*np.std(bad_neighbour))
+    # The "very bad" limit is set here at 30*standard deviation (why not?):
+    basic_candidates = np.nonzero(coarsing_diff > 30*np.std(bad_neighbour))
     sind = basic_candidates[0] # the spectra containing very bad neighbours
     rind = basic_candidates[1] # each element from the "very bad neighbour" family
     if len(sind) > 0:
@@ -263,39 +287,34 @@ if initialization['CosmicRayCorrection']:
                                                 title=[f"indice={i}" for i in CR_cand_ind],
                                                 label=['normalized spectra',
                                                        'median correction']);
-        if len(CR_cand_ind) > 100:
+        if len(CR_cand_ind) > 10:
             plt.figure()
             sns.violinplot(y=rind)
             plt.title("Distribution of Cosmic Rays")
             plt.ylabel("CCD pixel struck")
     else:
         print("No Cosmic Rays found!")
-# =============================================================================
-# #%% removing the baseline with pca (does not work any more - because of the scaling?)
-# pca1 = decomposition.PCA(n_components=10, whiten=False)
-# if mock_sp3.shape[0] < mock_sp3.shape[1]:
-#     spectra_reduced1 = pca1.fit_transform(mock_sp3.T)
-#     #spectra_reduced = pca.transform(spectra_kept)
-#     spectra_denoised1 = pca1.inverse_transform(spectra_reduced1).T
-# else:
-#     spectra_reduced1 = pca1.fit_transform(mock_sp3)
-#     spectra_denoised1 = pca1.inverse_transform(spectra_reduced1)
-# # the next line removes the share of the first component from each spectrum:
-# pca_1comp_bl = np.outer(spectra_reduced1[:,0], pca1.components_[0])
-# pca_way = mock_sp3 - pca_1comp_bl
-# pca_way -= np.min(pca_way, axis=-1)[:, np.newaxis]
-# =============================================================================
 #%%
+print(f"smoothing with PCA ({initialization['PCA_components']} components)")
+# =============================================================================
 pca = decomposition.PCA(n_components=initialization['PCA_components'])
 spectra_reduced = pca.fit_transform(mock_sp3)
-spectra_denoised = pca.inverse_transform(spectra_reduced)
+# spectra_reduced = np.dot(mock_sp3 - np.mean(mock_sp3, axis=0), pca.components_.T)
 
-pca_err = np.sum(np.abs(mock_sp3 - spectra_denoised), axis=1)
-pca_err.resize(_n_yy, _n_x)
-plt.figure()
-sns.heatmap(np.log(1+pca_err))
-plt.show()
-plt.title("Checking the reconstruction error from PCA denoising")
+spectra_denoised = pca.inverse_transform(spectra_reduced)
+# spectra_denoised = np.dot(spectra_reduced, pca.components_)+np.mean(mock_sp3, axis=0)
+
+vidji = AllMaps(spectra_reduced.reshape(141,141,-1), components=pca.components_,
+                components_sigma=sigma_kept, title="pca component")
+
+
+#%%
+sq_err = (mock_sp3-spectra_denoised)
+pipun = AllMaps(sq_err.reshape(_n_yy, _n_x, -1), sigma=sigma_kept,
+                title="denoising error")
+
+
+# =============================================================================
 
 #%%
 
@@ -310,29 +329,12 @@ see_all_spectra = NavigationButtons(sigma_kept, _s, autoscale_y=True,
                                            "pca denoised"],
                                     figsize=(12, 12))
 
-#%%
-# =============================================================================
-# Finding the baseline using the asynchronous least squares method
-# =============================================================================
-if initialization['BaselineCorrection']:
-    _start = time()
-    print("starting the baseline correction..."
-          f"\n(be patient, this may take some time...)")
-    b_line = baseline_als(spectra_denoised)#, p=1e-3, lam=1e3)
-    _end = time()
-    print(f"baseline correction done in {_end - _start:.2f}s")
-    # Remove the eventual offsets:
-    b_corr_spectra = spectra_denoised - b_line
-    b_corr_spectra -= np.min(b_corr_spectra, axis=1)[:, np.newaxis]
 
-    # Visualise the baseline correction:
-    _baseline_stack = np.stack((spectra_denoised, b_line, b_corr_spectra),
-                               axis=-1)
-    labels = ['original spectra', 'baseline', 'baseline corrected spectra']
-    check_baseline = NavigationButtons(sigma_kept, _baseline_stack,
-                                       autoscale_y=True, label=labels)
-else:
-    b_corr_spectra = spectra_denoised
+
+#%%
+#plt.figure()
+#plt.plot(sigma_kept, np.std(b_corr_spectra, axis=0))
+#plt.title("standard deviation after area normalization and baseline substraction")
 # %%
 # =============================================================================
 #                                   NMF step
@@ -344,10 +346,10 @@ _n_components = initialization['NMF_NumberOfComponents']
 nmf_model = decomposition.NMF(n_components=_n_components, init='nndsvda',
                               max_iter=7, l1_ratio=1)
 _start = time()
-print('starting nmf... (be patient, this may take some time...)')
+#print('starting nmf... (be patient, this may take some time...)')
 mix = nmf_model.fit_transform(spectra_cleaned)
 components = nmf_model.components_
-reconstructed_spectra1 = nmf_model.inverse_transform(mix)
+reconstructed_spectra = nmf_model.inverse_transform(mix)
 _end = time()
 print(f'nmf done in {_end - _start:.2f}s')
 
@@ -359,6 +361,8 @@ print(f'nmf done in {_end - _start:.2f}s')
 mix.resize((_n_x*_n_y), _n_components, )
 
 mix = np.roll(mix, _start_pos, axis=0)
+
+#%%
 _comp_area = np.empty(_n_components)
 for _z in range(_n_components):
     # area beneath each component:
@@ -369,7 +373,9 @@ for _z in range(_n_components):
 spectra_reconstructed = np.dot(mix, components)
 _mix_reshaped = mix.reshape(_n_y, _n_x, _n_components)
 
-
+AllMaps(_mix_reshaped, components=components,
+        title="Map of component's contribution")
+plt.suptitle("Resluts of NMF")
 # %%
 # =============================================================================
 #                    Plotting the components....
@@ -414,7 +420,7 @@ if _n_components > 1:
 else:
     _ax = [_ax]
 
-#%%
+
 def onclick(event):
     '''Double-clicking on a pixel will pop-up the (cleaned) spectrum
     corresponding to that pixel, as well as its deconvolution on the components
@@ -469,7 +475,7 @@ if initialization['AbsoluteScale'] == True:
 else:
     scaling={}
 for _i in range(_n_components):
-    sns.heatmap(_mix_reshaped[:, :, _i], ax=_ax[_i], cmap="jet", annot=False, **scaling)
+    sns.heatmap(_mix_reshaped[:, :, _i], ax=_ax[_i], cmap="Spectral_r", annot=False, **scaling)
 #    _ax[_i].set_aspect(_s_y/_s_x)
     _ax[_i].set_title(f'Component {_i}', color=color_set.to_rgba(_i),
                       fontweight='extra bold')
@@ -500,25 +506,56 @@ fig.canvas.mpl_connect('button_press_event', onclick)
 # =============================================================================
 #        saving some data for usage in other software (Origin, Excel..)
 # =============================================================================
-_basic_mix = pd.DataFrame(
-        np.copy(mix),
-        columns=[f"mixing coeff. for the component {l}"
-                 for l in np.arange(mix.shape[1])]
-        )
-_save_filename_extension = (f"_{_n_components}NMFcomponents_from"
-                            f".csv")
-_save_filename_folder = '/'.join(x for x in filename.split('/')[:-1])+'/'\
-                        + filename.split('/')[-1][:-4]+'/'
-if not os.path.exists(_save_filename_folder):
-    os.mkdir(_save_filename_folder)
+if initialization["save_data"]:
+    _basic_mix = pd.DataFrame(
+            np.copy(mix),
+            columns=[f"mixing coeff. for the component {l}"
+                     for l in np.arange(mix.shape[1])]
+            )
+    _save_filename_extension = (f"_{_n_components}NMFcomponents_from"
+                                f".csv")
+    _save_filename_folder = '/'.join(x for x in filename.split('/')[:-1])+'/'\
+                            + filename.split('/')[-1][:-4]+'/'
+    if not os.path.exists(_save_filename_folder):
+        os.mkdir(_save_filename_folder)
 
-_basic_mix.to_csv(
-        f"{_save_filename_folder}MixingCoeffs{_save_filename_extension}",
-        sep=';', index=False)
-_save_components = pd.DataFrame(
-        components.T, index=sigma_kept,
-        columns=[f"Component{_i}" for _i in np.arange(_n_components)])
-_save_components.index.name = 'Raman shift in cm-1'
-_save_components.to_csv(
-        f"{_save_filename_folder}Components{_save_filename_extension}",
-        sep=';')
+    _basic_mix.to_csv(
+            f"{_save_filename_folder}MixingCoeffs{_save_filename_extension}",
+            sep=';', index=False)
+    _save_components = pd.DataFrame(
+            components.T, index=sigma_kept,
+            columns=[f"Component{_i}" for _i in np.arange(_n_components)])
+    _save_components.index.name = 'Raman shift in cm-1'
+    _save_components.to_csv(
+            f"{_save_filename_folder}Components{_save_filename_extension}",
+            sep=';')
+# =============================================================================
+# #%%
+# deviation_raw = np.std(spectra_kept, axis=0)
+# deviation_norm = np.std(b_corr_spectra, axis=0)
+# fig, ax1 = plt.subplots()
+# ax2 = ax1.twinx()
+#
+# deviation_line, = ax1.plot(sigma_kept, deviation_norm, 'b')
+# med_sp_line, = ax2.plot(sigma_kept, np.median(mock_sp3, axis=0), 'r')
+# ax1.legend((deviation_line, med_sp_line),
+#            ("standard deviation of baseline corrected spectra",
+#             "median spectra"))
+# #plt.title("comparaison of standard deviations\n"
+# #          "raw(blue/left) vs normalalized (red/right)")
+# plt.show()
+# #%%
+# deviation_raw = np.std(b_corr_spectra, axis=0)
+# deviation_norm = np.std(spectra_cleaned, axis=0)
+# fig, ax1 = plt.subplots()
+# ax2 = ax1.twinx()
+#
+# b_corr_std_line, = ax1.plot(sigma_kept, deviation_raw, 'b')
+# renorm_std_line, = ax2.plot(sigma_kept, deviation_norm, 'r')
+#
+# ax1.legend((b_corr_std_line, renorm_std_line),
+#            ("normalized+baseline corrected", "blue normalized over area"))
+# ax1.set_title("comparaison of standard deviations")
+# plt.show()
+#
+# =============================================================================
