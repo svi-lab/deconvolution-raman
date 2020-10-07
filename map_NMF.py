@@ -279,7 +279,7 @@ if initialization['CosmicRayCorrection']:
         mock_sp3[other_candidates] = median_spectra3[other_candidates]
 
 
-        CR_cand_ind = np.unique(np.asarray(other_candidates)[0])
+        CR_cand_ind = np.unique(sind)
         #CR_cand_ind = np.arange(len(spectra_kept))
         _ss = np.stack((normalized_spectra[CR_cand_ind],
                         mock_sp3[CR_cand_ind]), axis=-1)
