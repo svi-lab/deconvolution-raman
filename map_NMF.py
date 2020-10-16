@@ -43,7 +43,7 @@ Third plot: the heatmap of the mixing coefficients
 # -----------------------Choose a file-----------------------------------------
 
 folder_name = "./Data/Amandine/"
-file_n = "SAS4-34-3-532nm-obj100-p100-10s-carto.wdf"
+file_n = "SAS4-34-3-532nm-obj100-p100-10s-carto-reperage.wdf"
 #file_n = "M1C0/map_surface/M1C0_Map_Qontor_7x7cm_Surface1.wdf"
 filename = folder_name + file_n
 
@@ -53,7 +53,7 @@ initialization = {'SliceValues': [400, None],#[350, 1300], # Use None to count a
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
-                  'NumberOfLinesToSkip_End': 19,
+                  'NumberOfLinesToSkip_End': 0,
                   'BaselineCorrection': False,
                   'CosmicRayCorrection': True,
                   # Nearest neighbour method
@@ -127,18 +127,17 @@ except (NameError, KeyError):
     _s_y = int(input("Enter the size of the step along y-axis: "))
     print("ok")
 
-try:
-    if params['MeasurementType'] == 'Map':
-        if (initialization['NumberOfLinesToSkip_Beggining']
-                + initialization['NumberOfLinesToSkip_End']) > _n_y:
-            raise SystemExit('You are skiping more lines than present in the scan.\n'
-                             'Please revise your initialization parameters')
-        _n_yy = _n_y - initialization['NumberOfLinesToSkip_End'] -\
-                       initialization['NumberOfLinesToSkip_Beggining']
-    else:
-        raise SystemExit("Can't yet handle this type of scan")
-except:
-    pass
+
+if params['MeasurementType'] == 'Map':
+    if (initialization['NumberOfLinesToSkip_Beggining']
+            + initialization['NumberOfLinesToSkip_End']) > _n_y:
+        raise SystemExit('You chose to skip more lines than present in the scan.\n'
+                         'Please revise your initialization parameters')
+    _n_yy = _n_y - initialization['NumberOfLinesToSkip_End'] -\
+                   initialization['NumberOfLinesToSkip_Beggining']
+else:
+    raise SystemExit("Can't yet handle this type of scan")
+
 spectra2 = np.copy(spectra)
 spectra2.resize(_n_y, _n_x, len(sigma))
 spectra = spectra2.reshape(_n_x*_n_y, -1)
@@ -301,6 +300,9 @@ if initialization['CosmicRayCorrection']:
     else:
         print("No Cosmic Rays found!")
 #%%
+# =============================================================================
+# ---------------------------------- PCA --------------------------------------
+# =============================================================================
 print(f"smoothing with PCA ({initialization['PCA_components']} components)")
 # =============================================================================
 pca = decomposition.PCA(n_components=initialization['PCA_components'])
@@ -314,20 +316,14 @@ vidji_pca = AllMaps(spectra_reduced.reshape(_n_yy,_n_x,-1), components=pca.compo
                 components_sigma=sigma_kept, title="pca component")
 
 
-#%%
-sq_err = (mock_sp3-spectra_denoised)
-vidji_pca_err = AllMaps(sq_err.reshape(_n_yy, _n_x, -1), sigma=sigma_kept,
-                title="denoising error")
-
-
+# =============================================================================
+# #%%
+# sq_err = (mock_sp3-spectra_denoised)
+# vidji_pca_err = AllMaps(sq_err.reshape(_n_yy, _n_x, -1), sigma=sigma_kept,
+#                 title="denoising error")
 # =============================================================================
 
-#%%
-
-# =============================================================================
-#                  showing the smoothed spectra
-# =============================================================================
-
+########### showing the smoothed spectra #####################
 _s = np.stack((mock_sp3,
                spectra_denoised), axis=-1)
 see_all_denoised = NavigationButtons(sigma_kept, _s, autoscale_y=True,
@@ -337,10 +333,6 @@ see_all_denoised = NavigationButtons(sigma_kept, _s, autoscale_y=True,
 see_all_denoised.figr.suptitle("PCA denoising result")
 
 
-#%%
-#plt.figure()
-#plt.plot(sigma_kept, np.std(b_corr_spectra, axis=0))
-#plt.title("standard deviation after area normalization and baseline substraction")
 # %%
 # =============================================================================
 #                                   NMF step
@@ -430,6 +422,8 @@ else:
     _ax = [_ax]
 
 mix_sum = np.sum(mix, axis=-1)
+
+
 def onclick(event):
     '''Double-clicking on a pixel will pop-up the (cleaned) spectrum
     corresponding to that pixel, as well as its deconvolution on the components
@@ -472,9 +466,9 @@ _ycolumn_name = ['X', 'Y', 'Z'][_y_index]
 #################################################################################
 ############## This formatting should be adapted case by case ###################
 try:
-    _y_ticks = [str(int(x/1000))+'mm' for x in
+    _y_ticks = [str(int(x))+'um' for x in
                 np.asarray(origins[_ycolumn_name].iloc[:_n_x*_n_y:_n_x])]
-    _x_ticks = [str(int(x/1000))+'mm' for x in
+    _x_ticks = [str(int(x))+'um' for x in
                 np.asarray(origins[_xcolumn_name].iloc[:_n_x])]
 except:
     pass
@@ -488,14 +482,7 @@ for _i in range(_n_components):
 #    _ax[_i].set_aspect(_s_y/_s_x)
     _ax[_i].set_title(f'Component {_i}', color=color_set.to_rgba(_i),
                       fontweight='extra bold')
-#    _ax[_i].set_xticks(10*np.arange(max(12, np.ceil(_n_x/10))))
-#    _ax[_i].set_yticks(10*np.arange(max(12, np.ceil(_n_y/10))))
-#    print(_i)
-    #plt.yticks(10*np.arange(np.floor(_n_y/10)), _y_ticks[::10])
-#    try:
-#        _ax[_i].set_xticklabels(_x_ticks[::10], size=8, va='bottom')
-#        _ax[_i].set_yticklabels(_y_ticks[::10], size=8)
-#    except: pass
+
     plt.setp(_ax[_i].get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
 #try:
 #    fig.text(0.5, 0.014,
