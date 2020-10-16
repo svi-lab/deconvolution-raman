@@ -42,24 +42,25 @@ Third plot: the heatmap of the mixing coefficients
 #%%
 # -----------------------Choose a file-----------------------------------------
 
-folder_name = "./Data/Maxime/Cartos plaques/"
-file_n = "M1C0/map_depth/M1C0_Map_Reflex_7x7cm_depth2mm_1.wdf"
-file_n = "M1C0/map_surface/M1C0_Map_Qontor_7x7cm_Surface1.wdf"
+folder_name = "./Data/Amandine/"
+file_n = "SAS4-34-3-532nm-obj100-p100-10s-carto.wdf"
+#file_n = "M1C0/map_surface/M1C0_Map_Qontor_7x7cm_Surface1.wdf"
 filename = folder_name + file_n
 
-initialization = {'SliceValues': [350, 1300],  # Use None to count all
-                  'NMF_NumberOfComponents': 6,
-                  'PCA_components': 21,#0.998,
+initialization = {'SliceValues': [400, None],#[350, 1300], # Use None to count all
+                  'NMF_NumberOfComponents': 4,
+                  'PCA_components': 7,#0.998,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
-                  'NumberOfLinesToSkip_End': 0,
-                  'BaselineCorrection': True,
-                  'CosmicRayCorrection': True, # Nearest neighbour method
-                   # To use only in maps where step sizes are smaller then
-                   # Sample's feature sizes (oversampled maps)
-                  'AbsoluteScale': False,
-                  "save_data": False}# what type of colorbar to use
+                  'NumberOfLinesToSkip_End': 19,
+                  'BaselineCorrection': False,
+                  'CosmicRayCorrection': True,
+                  # Nearest neighbour method
+                  # To use only in maps where step sizes are smaller then
+                  # Sample's feature sizes (oversampled maps)
+                  'AbsoluteScale': False,  # what type of colorbar to use
+                  "save_data": False}
 #%%
 # Reading the data from the .wdf file
 spectra, sigma, params, map_params, origins =\
@@ -138,6 +139,9 @@ try:
         raise SystemExit("Can't yet handle this type of scan")
 except:
     pass
+spectra2 = np.copy(spectra)
+spectra2.resize(_n_y, _n_x, len(sigma))
+spectra = spectra2.reshape(_n_x*_n_y, -1)
 # %%
 # =============================================================================
 #                               SLICING....
@@ -183,8 +187,8 @@ spectra_kept = spectra_kept[_start_pos:_end_pos]
 
 see_all_spectra = NavigationButtons(sigma, spectra, autoscale_y=True)
 
-see_all_maps = AllMaps((np.log(1+spectra)).reshape(_n_yy, _n_x, -1),
-                       sigma=sigma)#, title="raw spectra (log_scale)")
+see_all_maps = AllMaps((np.log(1+spectra_kept)).reshape(_n_yy, _n_x, -1),
+                       sigma=sigma_kept)#, title="raw spectra (log_scale)")
 plt.suptitle("raw spectra (log_scale)")
 
 #%%
@@ -259,7 +263,7 @@ if initialization['CosmicRayCorrection']:
         # =============================================================================
         npix = len(sigma)
         ext_size = int(npix/50)
-        assert ext_size%2 == 1, 'must be odd'
+        if ext_size%2 != 1: ext_size+=1
         extended_sind = np.stack((sind, )*ext_size, axis=-1).reshape(len(sind)*ext_size,)
         rind_stack = tuple()
         for ii in np.arange(-(ext_size//2), ext_size//2+1):
@@ -306,13 +310,13 @@ spectra_reduced = pca.fit_transform(mock_sp3)
 spectra_denoised = pca.inverse_transform(spectra_reduced)
 # spectra_denoised = np.dot(spectra_reduced, pca.components_)+np.mean(mock_sp3, axis=0)
 
-vidji = AllMaps(spectra_reduced.reshape(141,141,-1), components=pca.components_,
+vidji_pca = AllMaps(spectra_reduced.reshape(_n_yy,_n_x,-1), components=pca.components_,
                 components_sigma=sigma_kept, title="pca component")
 
 
 #%%
 sq_err = (mock_sp3-spectra_denoised)
-pipun = AllMaps(sq_err.reshape(_n_yy, _n_x, -1), sigma=sigma_kept,
+vidji_pca_err = AllMaps(sq_err.reshape(_n_yy, _n_x, -1), sigma=sigma_kept,
                 title="denoising error")
 
 
@@ -326,11 +330,11 @@ pipun = AllMaps(sq_err.reshape(_n_yy, _n_x, -1), sigma=sigma_kept,
 
 _s = np.stack((mock_sp3,
                spectra_denoised), axis=-1)
-see_all_spectra = NavigationButtons(sigma_kept, _s, autoscale_y=True,
+see_all_denoised = NavigationButtons(sigma_kept, _s, autoscale_y=True,
                                     label=["scaled orig spectra",
                                            "pca denoised"],
                                     figsize=(12, 12))
-
+see_all_denoised.figr.suptitle("PCA denoising result")
 
 
 #%%
@@ -342,8 +346,8 @@ see_all_spectra = NavigationButtons(sigma_kept, _s, autoscale_y=True,
 #                                   NMF step
 # =============================================================================
 
-spectra_cleaned = clean(sigma_kept, b_corr_spectra, mode='area')
-
+#spectra_cleaned = clean(sigma_kept, b_corr_spectra, mode='area')
+spectra_cleaned = b_corr_spectra
 _n_components = initialization['NMF_NumberOfComponents']
 nmf_model = decomposition.NMF(n_components=_n_components, init='nndsvda',
                               max_iter=7, l1_ratio=1)
@@ -360,22 +364,25 @@ print(f'nmf done in {_end - _start:.2f}s')
 #                    preparing the mixture coefficients
 # =============================================================================
 
-mix.resize((_n_x*_n_y), _n_components, )
+mix.resize((_n_x*_n_yy), _n_components, )
 
 mix = np.roll(mix, _start_pos, axis=0)
 
 #%%
-_comp_area = np.empty(_n_components)
-for _z in range(_n_components):
-    # area beneath each component:
-    _comp_area[_z] = np.trapz(components[_z])
-    components[_z] /= _comp_area[_z]  # normalizing the components by area
-    # renormalizing the mixture coefficients:
-    mix[:, _z] *= _comp_area[np.newaxis, _z]
+# =============================================================================
+# _comp_area = np.empty(_n_components)
+# for _z in range(_n_components):
+#     # area beneath each component:
+#     _comp_area[_z] = np.trapz(components[_z])
+#     components[_z] /= _comp_area[_z]  # normalizing the components by area
+#     # renormalizing the mixture coefficients:
+#     mix[:, _z] *= _comp_area[np.newaxis, _z]
+# =============================================================================
 spectra_reconstructed = np.dot(mix, components)
-_mix_reshaped = mix.reshape(_n_y, _n_x, _n_components)
+_mix_reshaped = mix.reshape(_n_yy, _n_x, _n_components)
 
-AllMaps(_mix_reshaped, components=components,
+vidju_nmf = AllMaps(_mix_reshaped, components=components,
+                    components_sigma=sigma_kept,
         title="Map of component's contribution")
 plt.suptitle("Resluts of NMF")
 # %%
@@ -386,7 +393,7 @@ sns.set()  # to make plots pretty :)
 
 # to keep always the same colors for the same components:
 col_norm = colors.Normalize(vmin=0, vmax=_n_components)
-color_set = ScalarMappable(norm=col_norm, cmap="brg")
+color_set = ScalarMappable(norm=col_norm, cmap="hsv")
 
 # infer the number of subplots and their disposition from n_components
 fi, _ax = plt.subplots(int(np.floor(np.sqrt(_n_components))),
@@ -404,7 +411,7 @@ for _i in range(_n_components):
 try:
     fi.text(0.5, 0.04,
             f"{params['XlistDataType']} recordings"
-            f"in {params['XlistDataUnits']} units",
+            f" in {params['XlistDataUnits']} units",
             ha='center')
 except:
     pass
@@ -422,7 +429,7 @@ if _n_components > 1:
 else:
     _ax = [_ax]
 
-
+mix_sum = np.sum(mix, axis=-1)
 def onclick(event):
     '''Double-clicking on a pixel will pop-up the (cleaned) spectrum
     corresponding to that pixel, as well as its deconvolution on the components
@@ -443,7 +450,7 @@ def onclick(event):
                 aa.plot(sigma_kept, components[k]*mix[broj][k],
                         color=color_set.to_rgba(k),
                         label=f'Component {k} contribution'
-                              f'({mix[broj][k]*100:.1f}%)')
+                              f'({mix[broj][k]*100/mix_sum[broj]:.1f}%)')
 
 # This next part is to reorganize the order of labels,
 # so to put the scatter plot first
