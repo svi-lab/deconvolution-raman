@@ -44,6 +44,7 @@ Third plot: the heatmap of the mixing coefficients
 
 folder_name = "./Data/Maxime/Cartos plaques/"
 file_n = "M1C0/map_depth/M1C0_Map_Reflex_7x7cm_depth2mm_1.wdf"
+file_n = "M1C0/map_surface/M1C0_Map_Qontor_7x7cm_Surface1.wdf"
 filename = folder_name + file_n
 
 initialization = {'SliceValues': [350, 1300],  # Use None to count all
@@ -256,7 +257,8 @@ if initialization['CosmicRayCorrection']:
         #               We want to extend the "very bad neighbour" label
         #           to ext_size adjecent family members in each such spectra:
         # =============================================================================
-        ext_size = 31
+        npix = len(sigma)
+        ext_size = int(npix/50)
         assert ext_size%2 == 1, 'must be odd'
         extended_sind = np.stack((sind, )*ext_size, axis=-1).reshape(len(sind)*ext_size,)
         rind_stack = tuple()
