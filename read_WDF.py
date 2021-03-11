@@ -78,8 +78,9 @@ def read_WDF(filename, verbose=False):
                  3: 'LineFocusMapping', 4: 'InvertedRows',
                  5: 'InvertedColumns', 6: 'SurfaceProfile',
                  7: 'XyLine', 68: 'InvertedRows', 128: 'Slice',
-                 64: 'Autofocus? (check with Chloe)'}
-                # Remember to check this 68 and 64
+                 64: 'Autofocus? (check with Chloe)',
+                 66: 'Alternating'}
+                # Remember to check this 66 and 64 via WiRE
 
     MEASUREMENT_TYPES = ['Unspecified', 'Single', 'Series', 'Map']
 
@@ -90,7 +91,8 @@ def read_WDF(filename, verbose=False):
 
     try:
         f = open(filename, "rb")
-        print(f'Reading the file: \"{filename.split("/")[-1]}\"\n')
+        if verbose:
+            print(f'Reading the file: \"{filename.split("/")[-1]}\"\n')
     except IOError:
         raise IOError(f"File {filename} does not exist!")
 
@@ -218,6 +220,10 @@ def read_WDF(filename, verbose=False):
                           'so it could be read\n'
                           'the same way as other scan types'
                           '(from left to right, and from top to bottom)')
+            if map_params['MapAreaType'] == 'Alternating':
+                spectra = spectra.reshape(n_x, n_y, -1)
+                spectra = np.rot90(spectra, axes=(0, 1)).ravel()
+
 
     name = 'XLST'
     gen = [i for i, x in enumerate(block_names) if x == name]

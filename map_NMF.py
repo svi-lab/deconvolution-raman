@@ -42,14 +42,13 @@ Third plot: the heatmap of the mixing coefficients
 #%%
 # -----------------------Choose a file-----------------------------------------
 
-folder_name = "./Data/Amandine/"
-file_n = "SAS4-34-3-532nm-obj100-p100-10s-carto-reperage.wdf"
-#file_n = "M1C0/map_surface/M1C0_Map_Qontor_7x7cm_Surface1.wdf"
+folder_name = "./Data/Chloe/"
+file_n = "cBN50-532streamline-x20-2s-carto1.wdf"
 filename = folder_name + file_n
 
-initialization = {'SliceValues': [400, None],#[350, 1300], # Use None to count all
-                  'NMF_NumberOfComponents': 4,
-                  'PCA_components': 7,#0.998,
+initialization = {'SliceValues': [None, None], # Use None to count all
+                  'NMF_NumberOfComponents': 3,
+                  'PCA_components': 0.998,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
@@ -66,7 +65,7 @@ initialization = {'SliceValues': [400, None],#[350, 1300], # Use None to count a
 spectra, sigma, params, map_params, origins =\
                             read_WDF(filename, verbose=True)
 
-
+assert params['MeasurementType'] == 'Map', 'This script is intended for maps'
 '''
 - **"spectra"** is a 2D numpy array containing the intensities
     recorded at each point in a map scan.
@@ -76,7 +75,7 @@ spectra, sigma, params, map_params, origins =\
     Its' length is `N°_RamanShifts`
 - **"params"** is a dictionnary containing measurement parameters
 - **"map_params"** is dictionnary containing map parameters
-- **"origins"** is a pandas dataframe giving detail on each point in the map scan
+- **"origins"** is a pandas dataframe giving detail on each point in the map
     (time of measurement, _coordinates and some other info).
 
 > _Note: It should be noted that the timestamp
@@ -84,33 +83,47 @@ spectra, sigma, params, map_params, origins =\
     if you want to convert it to the human readable format,
     you can use the imported "convert_time" function_
 '''
-
-
-
+#%%
+# =============================================================================
+# fig = plt.figure()
+# ax = fig.add_subplot(111, projection='3d')
+# spatial_x = origins.iloc[:,0]
+# spatial_y = origins.iloc[:,1]
+# spatial_z = origins.iloc[:,5]
+# rugosite = ax.plot_trisurf(spatial_x, spatial_y, spatial_z,
+#                 linewidth=0.2, cmap='hot',
+#                 edgecolor = 'none')
+# fig.colorbar(rugosite, ax = ax, shrink = 0.5, aspect = 5)
+# ax.set_title('Surface of the M1C0 sample')
+# #zlim = (max(max)
+# ax.set_zlim(-3000, 3000)
+# ax.set_xlabel('X-axis [µm]', fontweight ='bold')
+# ax.set_ylabel('Y-axis [µm]', fontweight ='bold')
+# ax.set_zlabel('Z-axis [µm]', fontweight ='bold')
+#
+#
+# =============================================================================
 #%%
 # put the retreived number of measurements in a variable
 # with a shorter name, as it will be used quite often:
+_n_points = params.get('Count', len(spectra))
 try:
-    _n_points = int(params['Count'])
+    # Finding in what axes the scan was taken:
+    _scan_axes = list(np.where(map_params['NbSteps'] > 1)[0])
 except (NameError, KeyError):
-    _n_points = len(spectra)
-try:
-    if params['MeasurementType'] == 'Map':
-        # Finding in what axes the scan was taken:
-        _x_index, _y_index = np.where(map_params['NbSteps'] > 1)[0]
-except (NameError, KeyError):
-    _x_index, _y_index = 0, 1
+    _scan_axes = (0, 1)
 
 try:
-    if params['MeasurementType'] == 'Map':
-        # ATTENTION : from this point on in the script,
-        # the two relevant dimensions  will be called
-        # X and Y regardless if one of them is Z in reality (for slices)
-        _n_x, _n_y = map_params['NbSteps'][[_x_index, _y_index]]
+    # ATTENTION : from this point on in the script,
+    # the two relevant dimensions  will be called
+    # X and Y regardless if one of them is Z in reality (for slices)
+    _n_x, _n_y = map_params['NbSteps'][[_scan_axes]]
 except (NameError, KeyError):
     while True:
-        _n_x = int(input("Enter the total number of measurement points along x-axis: "))
-        _n_y = int(input("Enter the total number of measurement points along y-axis: "))
+        _n_x = int(input("Enter the total number of measurement points "
+                         "along x-axis: "))
+        _n_y = int(input("Enter the total number of measurement points "
+                         "along y-axis: "))
         if _n_x*_n_y == _n_points:
             print("That looks ok.")
             break
@@ -120,23 +133,21 @@ except (NameError, KeyError):
         break
 
 try:
-    if params['MeasurementType'] == 'Map':
-        _s_x, _s_y = map_params['StepSizes'][[_x_index, _y_index]]
+    _s_x, _s_y = map_params['StepSizes'][_scan_axes]
 except (NameError, KeyError):
     _s_x = int(input("Enter the size of the step along x-axis: "))
     _s_y = int(input("Enter the size of the step along y-axis: "))
     print("ok")
 
 
-if params['MeasurementType'] == 'Map':
-    if (initialization['NumberOfLinesToSkip_Beggining']
-            + initialization['NumberOfLinesToSkip_End']) > _n_y:
-        raise SystemExit('You chose to skip more lines than present in the scan.\n'
-                         'Please revise your initialization parameters')
-    _n_yy = _n_y - initialization['NumberOfLinesToSkip_End'] -\
-                   initialization['NumberOfLinesToSkip_Beggining']
-else:
-    raise SystemExit("Can't yet handle this type of scan")
+if (initialization['NumberOfLinesToSkip_Beggining']
+        + initialization['NumberOfLinesToSkip_End']) > _n_y:
+    raise SystemExit('You chose to skip more lines than present in the scan.\n'
+                     'Please revise your initialization parameters')
+# readjust the number of rows:
+_n_yy = _n_y - initialization['NumberOfLinesToSkip_End'] -\
+               initialization['NumberOfLinesToSkip_Beggining']
+
 
 spectra2 = np.copy(spectra)
 spectra2.resize(_n_y, _n_x, len(sigma))
@@ -183,10 +194,12 @@ spectra_kept = spectra_kept[_start_pos:_end_pos]
 # dinates are not necessarily the ones indicated with _x_index ans _y_index!
 # =============================================================================
 #_coordinates = origins.iloc[_start_pos:_end_pos, [_x_index+1, _y_index+1]]
+#%%
+#see_all_spectra = NavigationButtons(sigma, spectra, autoscale_y=True)
+#spectra_propre = np.rot90(spectra_kept.reshape(_n_x, _n_yy, -1), axes=(0,1)).ravel()
 
-see_all_spectra = NavigationButtons(sigma, spectra, autoscale_y=True)
-
-see_all_maps = AllMaps((np.log(1+spectra_kept)).reshape(_n_yy, _n_x, -1),
+jeveux = (1+np.log(spectra_kept)).reshape(_n_yy, _n_x, -1)
+see_all_maps = AllMaps(jeveux,
                        sigma=sigma_kept)#, title="raw spectra (log_scale)")
 plt.suptitle("raw spectra (log_scale)")
 
@@ -215,7 +228,8 @@ if initialization['BaselineCorrection']:
                                sigma=sigma_kept)
     plt.suptitle("baseline")
 else:
-    b_corr_spectra = spectra_kept - np.min(spectra_kept, axis=-1, keepdims=True)
+    b_corr_spectra = spectra_kept -\
+                    np.min(spectra_kept, axis=-1, keepdims=True)
 
 
 # %%
@@ -238,14 +252,6 @@ median_spectra3 = median_filter(mock_sp3, footprint=kkk)
 
 # I will only take into account the positive values (CR):
 coarsing_diff = (mock_sp3 - median_spectra3)
-# =============================================================================
-# # you can visualize the distribution of bad neighbours so to visualy determine
-# # where to set the limit between "bad neighbour" and "very bad neighbour"
-# plt.figure()
-# plt.boxplot(np.quantile(coarsing_diff, 0.99, axis=-1))
-# plt.title('dispersion of 1% highest discreapencies of the spectra from its neighbourhood')
-# plt.show()
-# =============================================================================
 if initialization['CosmicRayCorrection']:
     print("starting the cosmic ray correction")
     # find the highest differences between the spectra and its neighbours:
@@ -254,25 +260,28 @@ if initialization['CosmicRayCorrection']:
     # The "very bad" limit is set here at 30*standard deviation (why not?):
     basic_candidates = np.nonzero(coarsing_diff > 30*np.std(bad_neighbour))
     sind = basic_candidates[0] # the spectra containing very bad neighbours
-    rind = basic_candidates[1] # each element from the "very bad neighbour" family
+    rind = basic_candidates[1] # each element from the "very bad neighbour"
     if len(sind) > 0:
-        # =============================================================================
+        # =====================================================================
         #               We want to extend the "very bad neighbour" label
         #           to ext_size adjecent family members in each such spectra:
-        # =============================================================================
+        # =====================================================================
         npix = len(sigma)
         ext_size = int(npix/50)
         if ext_size%2 != 1: ext_size+=1
-        extended_sind = np.stack((sind, )*ext_size, axis=-1).reshape(len(sind)*ext_size,)
+        extended_sind = np.stack((sind, )*ext_size, axis=-1).reshape(
+                                                    len(sind)*ext_size,)
         rind_stack = tuple()
         for ii in np.arange(-(ext_size//2), ext_size//2+1):
             rind_stack += (rind + ii, )
-        extended_rind = np.stack(rind_stack, axis=-1).reshape(len(rind)*ext_size,)
+        extended_rind = np.stack(rind_stack, axis=-1).reshape(
+                                                    len(rind)*ext_size,)
         # The mirror approach for family members close to the border:
         extended_rind[np.nonzero(extended_rind<0)] =\
-                                            -extended_rind[np.nonzero(extended_rind<0)]
+            -extended_rind[np.nonzero(extended_rind<0)]
         extended_rind[np.nonzero(extended_rind>len(sigma_kept)-1)] =\
-         (len(sigma_kept)-1)*2 - extended_rind[np.nonzero(extended_rind>len(sigma_kept)-1)]
+         (len(sigma_kept)-1)*2 -\
+             extended_rind[np.nonzero(extended_rind>len(sigma_kept)-1)]
         # remove duplicates (https://stackoverflow.com/a/36237337/9368839):
         _base = extended_sind.max()+1
         _combi = extended_rind + _base * extended_sind
@@ -288,7 +297,8 @@ if initialization['CosmicRayCorrection']:
         #CR_cand_ind = np.arange(len(spectra_kept))
         _ss = np.stack((normalized_spectra[CR_cand_ind],
                         mock_sp3[CR_cand_ind]), axis=-1)
-        check_CR_candidates = NavigationButtons(sigma_kept, _ss, autoscale_y=True,
+        check_CR_candidates = NavigationButtons(sigma_kept, _ss,
+                                                autoscale_y=True,
                                                 title=[f"indice={i}" for i in CR_cand_ind],
                                                 label=['normalized spectra',
                                                        'median correction']);
@@ -312,8 +322,9 @@ spectra_reduced = pca.fit_transform(mock_sp3)
 spectra_denoised = pca.inverse_transform(spectra_reduced)
 # spectra_denoised = np.dot(spectra_reduced, pca.components_)+np.mean(mock_sp3, axis=0)
 
-vidji_pca = AllMaps(spectra_reduced.reshape(_n_yy,_n_x,-1), components=pca.components_,
-                components_sigma=sigma_kept, title="pca component")
+vidji_pca = AllMaps(spectra_reduced.reshape(_n_yy,_n_x,-1),
+                    components=pca.components_,
+                    components_sigma=sigma_kept, title="pca component")
 
 
 # =============================================================================
@@ -460,16 +471,19 @@ def onclick(event):
         print("you clicked outside the canvas, you bastard :)")
 
 
-_xcolumn_name = ['X', 'Y', 'Z'][_x_index]
-_ycolumn_name = ['X', 'Y', 'Z'][_y_index]
+_xcolumn_name, _ycolumn_name = (['SpatialX', 'SpatialY', 'SpatialZ'][i] for i in _scan_axes)
 
 #################################################################################
 ############## This formatting should be adapted case by case ###################
 try:
-    _y_ticks = [str(int(x))+'um' for x in
-                np.asarray(origins[_ycolumn_name].iloc[:_n_x*_n_y:_n_x])]
-    _x_ticks = [str(int(x))+'um' for x in
-                np.asarray(origins[_xcolumn_name].iloc[:_n_x])]
+#    _y_ticks = [str(int(x))+'um' for x in
+#                np.asarray(origins[_ycolumn_name].iloc[:_n_x*_n_y:_n_x])]
+#    _x_ticks = [str(int(x))+'um' for x in
+#                np.asarray(origins[_xcolumn_name].iloc[:_n_x])]
+    _x_ticks = origins.xs(_xcolumn_name, level=1,
+                          axis=1).to_numpy().ravel()[:_n_x]
+    _y_ticks = origins.xs(_ycolumn_name, level=1,
+                          axis=1).to_numpy().ravel()[::_n_x]
 except:
     pass
 #################################################################################
@@ -478,12 +492,20 @@ if initialization['AbsoluteScale'] == True:
 else:
     scaling={}
 for _i in range(_n_components):
-    sns.heatmap(_mix_reshaped[:, :, _i], ax=_ax[_i], cmap="Spectral_r", annot=False, **scaling)
+    sns.heatmap(_mix_reshaped[:, :, _i], ax=_ax[_i],
+                cmap="Spectral_r", annot=False, **scaling)
 #    _ax[_i].set_aspect(_s_y/_s_x)
     _ax[_i].set_title(f'Component {_i}', color=color_set.to_rgba(_i),
                       fontweight='extra bold')
-
-    plt.setp(_ax[_i].get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+    _pos_x = _ax[_i].get_xticks()
+    _pos_y = _ax[_i].get_yticks()
+    _xlabels = [str(x) for x in _x_ticks[::int(np.ceil(_n_x/len(_pos_x)))]]
+    _ylabels = [str(y) for y in _y_ticks[::int(np.ceil(_n_y/len(_pos_y)))]]
+    _ax[_i].set_xticklabels(_xlabels, rotation=45, ha="right", fontstretch=50)
+    _ax[_i].set_yticklabels(_ylabels, rotation=0, ha="right", fontstretch=50)
+    _ax[_i].set_xlabel(_xcolumn_name+"[µm]")
+    _ax[_i].set_ylabel(_ycolumn_name+"[µm]")
+    #plt.setp(_ax[_i].get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
 #try:
 #    fig.text(0.5, 0.014,
 #             f"{origins[_xcolumn_name].columns.to_frame().iloc[0,0]}",
