@@ -11,13 +11,12 @@ from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib import colors
-from matplotlib.widgets import Button
 import seaborn as sns
 from tkinter import filedialog, Tk, messagebox
 from timeit import default_timer as time
 from read_WDF import convert_time, read_WDF
-from utilities import NavigationButtons, clean, rolling_median,\
-                        slice_lr, baseline_als, AllMaps
+from warnings import warn
+from utilities import NavigationButtons, clean, slice_lr, baseline_als, AllMaps
 #import deconvolution
 
 sns.set()
@@ -50,9 +49,9 @@ initialization = {'SliceValues': [None, None], # Use None to count all
                   'NMF_NumberOfComponents': 3,
                   'PCA_components': 0.998,
                   # Put in the int number from 0 to _n_y:
-                  'NumberOfLinesToSkip_Beggining': 0,
+                  'NumberOfLinesToSkip_Beggining': 10,
                   # Put in the int number from 0 to _n_y - previous element:
-                  'NumberOfLinesToSkip_End': 0,
+                  'NumberOfLinesToSkip_End': 10,
                   'BaselineCorrection': False,
                   'CosmicRayCorrection': True,
                   # Nearest neighbour method
@@ -64,8 +63,6 @@ initialization = {'SliceValues': [None, None], # Use None to count all
 # Reading the data from the .wdf file
 spectra, sigma, params, map_params, origins =\
                             read_WDF(filename, verbose=True)
-
-assert params['MeasurementType'] == 'Map', 'This script is intended for maps'
 '''
 - **"spectra"** is a 2D numpy array containing the intensities
     recorded at each point in a map scan.
@@ -83,26 +80,7 @@ assert params['MeasurementType'] == 'Map', 'This script is intended for maps'
     if you want to convert it to the human readable format,
     you can use the imported "convert_time" function_
 '''
-#%%
-# =============================================================================
-# fig = plt.figure()
-# ax = fig.add_subplot(111, projection='3d')
-# spatial_x = origins.iloc[:,0]
-# spatial_y = origins.iloc[:,1]
-# spatial_z = origins.iloc[:,5]
-# rugosite = ax.plot_trisurf(spatial_x, spatial_y, spatial_z,
-#                 linewidth=0.2, cmap='hot',
-#                 edgecolor = 'none')
-# fig.colorbar(rugosite, ax = ax, shrink = 0.5, aspect = 5)
-# ax.set_title('Surface of the M1C0 sample')
-# #zlim = (max(max)
-# ax.set_zlim(-3000, 3000)
-# ax.set_xlabel('X-axis [µm]', fontweight ='bold')
-# ax.set_ylabel('Y-axis [µm]', fontweight ='bold')
-# ax.set_zlabel('Z-axis [µm]', fontweight ='bold')
-#
-#
-# =============================================================================
+assert params['MeasurementType'] == 'Map', 'This script is intended for maps'
 #%%
 # put the retreived number of measurements in a variable
 # with a shorter name, as it will be used quite often:
@@ -115,8 +93,8 @@ except (NameError, KeyError):
 
 try:
     # ATTENTION : from this point on in the script,
-    # the two relevant dimensions  will be called
-    # X and Y regardless if one of them is Z in reality (for slices)
+    # the two relevant dimensions will be called X and Y
+    # regardless if one of them is Z in reality (for slices)
     _n_x, _n_y = map_params['NbSteps'][[_scan_axes]]
 except (NameError, KeyError):
     while True:
@@ -471,21 +449,11 @@ def onclick(event):
         print("you clicked outside the canvas, you bastard :)")
 
 
-_xcolumn_name, _ycolumn_name = (['SpatialX', 'SpatialY', 'SpatialZ'][i] for i in _scan_axes)
+_xcolumn_name, _ycolumn_name = ([origins.columns[i][1] for i in _scan_axes])
 
 #################################################################################
 ############## This formatting should be adapted case by case ###################
-try:
-#    _y_ticks = [str(int(x))+'um' for x in
-#                np.asarray(origins[_ycolumn_name].iloc[:_n_x*_n_y:_n_x])]
-#    _x_ticks = [str(int(x))+'um' for x in
-#                np.asarray(origins[_xcolumn_name].iloc[:_n_x])]
-    _x_ticks = origins.xs(_xcolumn_name, level=1,
-                          axis=1).to_numpy().ravel()[:_n_x]
-    _y_ticks = origins.xs(_ycolumn_name, level=1,
-                          axis=1).to_numpy().ravel()[::_n_x]
-except:
-    pass
+
 #################################################################################
 if initialization['AbsoluteScale'] == True:
     scaling = {'vmin': 0, 'vmax': 1}
@@ -497,25 +465,25 @@ for _i in range(_n_components):
 #    _ax[_i].set_aspect(_s_y/_s_x)
     _ax[_i].set_title(f'Component {_i}', color=color_set.to_rgba(_i),
                       fontweight='extra bold')
-    _pos_x = _ax[_i].get_xticks()
-    _pos_y = _ax[_i].get_yticks()
-    _xlabels = [str(x) for x in _x_ticks[::int(np.ceil(_n_x/len(_pos_x)))]]
-    _ylabels = [str(y) for y in _y_ticks[::int(np.ceil(_n_y/len(_pos_y)))]]
-    _ax[_i].set_xticklabels(_xlabels, rotation=45, ha="right", fontstretch=50)
-    _ax[_i].set_yticklabels(_ylabels, rotation=0, ha="right", fontstretch=50)
-    _ax[_i].set_xlabel(_xcolumn_name+"[µm]")
-    _ax[_i].set_ylabel(_ycolumn_name+"[µm]")
-    #plt.setp(_ax[_i].get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-#try:
-#    fig.text(0.5, 0.014,
-#             f"{origins[_xcolumn_name].columns.to_frame().iloc[0,0]}",
-#             #f" in {origins[_xcolumn_name].columns.to_frame().iloc[0,1]}",
-#             ha='center')
-#    fig.text(0.04, 0.5,
-#             f"{origins[_ycolumn_name].columns.to_frame().iloc[0,0]}",
-#             #f" in {origins[_ycolumn_name].columns.to_frame().iloc[0,1]}",
-#             rotation=90, va='center')
-#except: pass
+    try:
+    #    _y_ticks = [str(int(x))+'um' for x in
+    #                np.asarray(origins[_ycolumn_name].iloc[:_n_x*_n_y:_n_x])]
+    #    _x_ticks = [str(int(x))+'um' for x in
+    #                np.asarray(origins[_xcolumn_name].iloc[:_n_x])]
+        _x_ticks = origins.xs(_xcolumn_name, level=1,
+                              axis=1).to_numpy().ravel()[:_n_x]
+        _y_ticks = origins.xs(_ycolumn_name, level=1,
+                              axis=1).to_numpy().ravel()[::_n_x]
+        _pos_x = _ax[_i].get_xticks()
+        _pos_y = _ax[_i].get_yticks()
+        _xlabels = [str(x) for x in _x_ticks[::int(np.ceil(_n_x/len(_pos_x)))]]
+        _ylabels = [str(y) for y in _y_ticks[::int(np.ceil(_n_y/len(_pos_y)))]]
+        _ax[_i].set_xticklabels(_xlabels, rotation=45, ha="right", fontstretch=50)
+        _ax[_i].set_yticklabels(_ylabels, rotation=0, ha="right", fontstretch=50)
+        _ax[_i].set_xlabel(_xcolumn_name+"[µm]")
+        _ax[_i].set_ylabel(_ycolumn_name+"[µm]")
+    except:
+        pass
 fig.suptitle('Heatmaps showing the abundance of individual components'
              ' throughout the scanned area.')
 fig.canvas.mpl_connect('button_press_event', onclick)

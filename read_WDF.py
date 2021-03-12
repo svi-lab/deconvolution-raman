@@ -294,6 +294,9 @@ def read_WDF(filename, verbose=False):
                                             else origin_values[set_n][xx]
                                             for xx in range(nspectra)]
                     origin_values[set_n] = np.asarray(origin_values[set_n])
+                if map_params['MapAreaType'] == 'Alternating':
+                    ovl = origin_values[set_n].reshape(n_x, n_y, -1)
+                    origin_values[set_n] = np.rot90(ovl, axes=(0, 1)).ravel()
     if verbose:
         print('\n\n\n')
     origins = pd.DataFrame(origin_values.T,
