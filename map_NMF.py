@@ -4,10 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 from sklearn import decomposition
-from sklearn.neighbors import LocalOutlierFactor
-from scipy.signal import savgol_filter, correlate2d, convolve2d, oaconvolve
 from scipy.ndimage import median_filter
-from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib import colors
@@ -16,8 +13,8 @@ from tkinter import filedialog, Tk, messagebox
 from timeit import default_timer as time
 from read_WDF import convert_time, read_WDF
 from warnings import warn
-from utilities import NavigationButtons, clean, slice_lr, baseline_als, AllMaps
-#import deconvolution
+from utilities import NavigationButtons, slice_lr, baseline_als, AllMaps
+
 
 sns.set()
 '''This script uses NMF deconvolution
@@ -38,31 +35,32 @@ Third plot: the heatmap of the mixing coefficients
             showing the spectra recorded at this point,
             together with the contributions of each component
 '''
-#%%
+# %%
 # -----------------------Choose a file-----------------------------------------
 
 folder_name = "./Data/Chloe/"
-file_n = "cBN50-532streamline-x20-2s-carto1.wdf"
+file_n = "cBN20-532streamline-x20-2s-carto1.wdf"
+
 filename = folder_name + file_n
 
-initialization = {'SliceValues': [None, None], # Use None to count all
-                  'NMF_NumberOfComponents': 3,
-                  'PCA_components': 0.998,
+initialization = {'SliceValues': [None, None],  # Use None to count all
+                  'NMF_NumberOfComponents': 4,
+                  'PCA_components': 25,
                   # Put in the int number from 0 to _n_y:
-                  'NumberOfLinesToSkip_Beggining': 10,
+                  'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
-                  'NumberOfLinesToSkip_End': 10,
-                  'BaselineCorrection': False,
+                  'NumberOfLinesToSkip_End': 0,
+                  'BaselineCorrection': True,
                   'CosmicRayCorrection': True,
                   # Nearest neighbour method
                   # To use only in maps where step sizes are smaller then
                   # Sample's feature sizes (oversampled maps)
                   'AbsoluteScale': False,  # what type of colorbar to use
                   "save_data": False}
-#%%
+# %%
 # Reading the data from the .wdf file
 spectra, sigma, params, map_params, origins =\
-                            read_WDF(filename, verbose=True)
+    read_WDF(filename, verbose=True)
 '''
 - **"spectra"** is a 2D numpy array containing the intensities
     recorded at each point in a map scan.
@@ -81,13 +79,13 @@ spectra, sigma, params, map_params, origins =\
     you can use the imported "convert_time" function_
 '''
 assert params['MeasurementType'] == 'Map', 'This script is intended for maps'
-#%%
+# %%
 # put the retreived number of measurements in a variable
 # with a shorter name, as it will be used quite often:
 _n_points = params.get('Count', len(spectra))
 try:
     # Finding in what axes the scan was taken:
-    _scan_axes = list(np.where(map_params['NbSteps'] > 1)[0])
+    _scan_axes = np.where(map_params['NbSteps'] > 1)[0]
 except (NameError, KeyError):
     _scan_axes = (0, 1)
 
@@ -95,7 +93,7 @@ try:
     # ATTENTION : from this point on in the script,
     # the two relevant dimensions will be called X and Y
     # regardless if one of them is Z in reality (for slices)
-    _n_x, _n_y = map_params['NbSteps'][[_scan_axes]]
+    _n_x, _n_y = map_params['NbSteps'][_scan_axes]
 except (NameError, KeyError):
     while True:
         _n_x = int(input("Enter the total number of measurement points "
@@ -124,7 +122,7 @@ if (initialization['NumberOfLinesToSkip_Beggining']
                      'Please revise your initialization parameters')
 # readjust the number of rows:
 _n_yy = _n_y - initialization['NumberOfLinesToSkip_End'] -\
-               initialization['NumberOfLinesToSkip_Beggining']
+    initialization['NumberOfLinesToSkip_Beggining']
 
 
 spectra2 = np.copy(spectra)
@@ -172,16 +170,16 @@ spectra_kept = spectra_kept[_start_pos:_end_pos]
 # dinates are not necessarily the ones indicated with _x_index ans _y_index!
 # =============================================================================
 #_coordinates = origins.iloc[_start_pos:_end_pos, [_x_index+1, _y_index+1]]
-#%%
+# %%
 #see_all_spectra = NavigationButtons(sigma, spectra, autoscale_y=True)
 #spectra_propre = np.rot90(spectra_kept.reshape(_n_x, _n_yy, -1), axes=(0,1)).ravel()
 
 jeveux = (1+np.log(spectra_kept)).reshape(_n_yy, _n_x, -1)
 see_all_maps = AllMaps(jeveux,
-                       sigma=sigma_kept)#, title="raw spectra (log_scale)")
+                       sigma=sigma_kept)  # , title="raw spectra (log_scale)")
 plt.suptitle("raw spectra (log_scale)")
 
-#%%
+# %%
 # =============================================================================
 # Finding the baseline using the asynchronous least squares method
 # =============================================================================
@@ -207,7 +205,7 @@ if initialization['BaselineCorrection']:
     plt.suptitle("baseline")
 else:
     b_corr_spectra = spectra_kept -\
-                    np.min(spectra_kept, axis=-1, keepdims=True)
+        np.min(spectra_kept, axis=-1, keepdims=True)
 
 
 # %%
@@ -223,7 +221,8 @@ mock_sp3 /= np.abs(scaling_koeff)
 normalized_spectra = np.copy(mock_sp3)
 # construct the footprint pointing to the pixels surrounding any given pixel:
 kkk = np.zeros((2*(_n_x+1) + 1, 1))
-kkk[[0, 1, 2, _n_x-1, _n_x+1, -3,-2,-1]] = 1 # does this value change anything?
+# does this value change anything?
+kkk[[0, 1, 2, _n_x-1, _n_x+1, -3, -2, -1]] = 1
 
 # each pixel has the median value of its surrounding neighbours:
 median_spectra3 = median_filter(mock_sp3, footprint=kkk)
@@ -236,9 +235,9 @@ if initialization['CosmicRayCorrection']:
     bad_neighbour = np.quantile(coarsing_diff, 0.99, axis=-1)
     # The find the spectra where the bad neighbour is very bad:
     # The "very bad" limit is set here at 30*standard deviation (why not?):
-    basic_candidates = np.nonzero(coarsing_diff > 30*np.std(bad_neighbour))
-    sind = basic_candidates[0] # the spectra containing very bad neighbours
-    rind = basic_candidates[1] # each element from the "very bad neighbour"
+    basic_candidates = np.nonzero(coarsing_diff > 40*np.std(bad_neighbour))
+    sind = basic_candidates[0]  # the spectra containing very bad neighbours
+    rind = basic_candidates[1]  # each element from the "very bad neighbour"
     if len(sind) > 0:
         # =====================================================================
         #               We want to extend the "very bad neighbour" label
@@ -246,20 +245,21 @@ if initialization['CosmicRayCorrection']:
         # =====================================================================
         npix = len(sigma)
         ext_size = int(npix/50)
-        if ext_size%2 != 1: ext_size+=1
+        if ext_size % 2 != 1:
+            ext_size += 1
         extended_sind = np.stack((sind, )*ext_size, axis=-1).reshape(
-                                                    len(sind)*ext_size,)
+            len(sind)*ext_size,)
         rind_stack = tuple()
         for ii in np.arange(-(ext_size//2), ext_size//2+1):
             rind_stack += (rind + ii, )
         extended_rind = np.stack(rind_stack, axis=-1).reshape(
-                                                    len(rind)*ext_size,)
+            len(rind)*ext_size,)
         # The mirror approach for family members close to the border:
-        extended_rind[np.nonzero(extended_rind<0)] =\
-            -extended_rind[np.nonzero(extended_rind<0)]
-        extended_rind[np.nonzero(extended_rind>len(sigma_kept)-1)] =\
-         (len(sigma_kept)-1)*2 -\
-             extended_rind[np.nonzero(extended_rind>len(sigma_kept)-1)]
+        extended_rind[np.nonzero(extended_rind < 0)] =\
+            -extended_rind[np.nonzero(extended_rind < 0)]
+        extended_rind[np.nonzero(extended_rind > len(sigma_kept)-1)] =\
+            (len(sigma_kept)-1)*2 -\
+            extended_rind[np.nonzero(extended_rind > len(sigma_kept)-1)]
         # remove duplicates (https://stackoverflow.com/a/36237337/9368839):
         _base = extended_sind.max()+1
         _combi = extended_rind + _base * extended_sind
@@ -270,16 +270,16 @@ if initialization['CosmicRayCorrection']:
         other_candidates = (extended_sind, extended_rind)
         mock_sp3[other_candidates] = median_spectra3[other_candidates]
 
-
         CR_cand_ind = np.unique(sind)
         #CR_cand_ind = np.arange(len(spectra_kept))
         _ss = np.stack((normalized_spectra[CR_cand_ind],
                         mock_sp3[CR_cand_ind]), axis=-1)
         check_CR_candidates = NavigationButtons(sigma_kept, _ss,
                                                 autoscale_y=True,
-                                                title=[f"indice={i}" for i in CR_cand_ind],
+                                                title=[
+                                                    f"indice={i}" for i in CR_cand_ind],
                                                 label=['normalized spectra',
-                                                       'median correction']);
+                                                       'median correction'])
         if len(CR_cand_ind) > 10:
             plt.figure()
             sns.violinplot(y=rind)
@@ -287,7 +287,7 @@ if initialization['CosmicRayCorrection']:
             plt.ylabel("CCD pixel struck")
     else:
         print("No Cosmic Rays found!")
-#%%
+# %%
 # =============================================================================
 # ---------------------------------- PCA --------------------------------------
 # =============================================================================
@@ -300,7 +300,7 @@ spectra_reduced = pca.fit_transform(mock_sp3)
 spectra_denoised = pca.inverse_transform(spectra_reduced)
 # spectra_denoised = np.dot(spectra_reduced, pca.components_)+np.mean(mock_sp3, axis=0)
 
-vidji_pca = AllMaps(spectra_reduced.reshape(_n_yy,_n_x,-1),
+vidji_pca = AllMaps(spectra_reduced.reshape(_n_yy, _n_x, -1),
                     components=pca.components_,
                     components_sigma=sigma_kept, title="pca component")
 
@@ -316,9 +316,9 @@ vidji_pca = AllMaps(spectra_reduced.reshape(_n_yy,_n_x,-1),
 _s = np.stack((mock_sp3,
                spectra_denoised), axis=-1)
 see_all_denoised = NavigationButtons(sigma_kept, _s, autoscale_y=True,
-                                    label=["scaled orig spectra",
-                                           "pca denoised"],
-                                    figsize=(12, 12))
+                                     label=["scaled orig spectra",
+                                            "pca denoised"],
+                                     figsize=(12, 12))
 see_all_denoised.figr.suptitle("PCA denoising result")
 
 
@@ -349,7 +349,7 @@ mix.resize((_n_x*_n_yy), _n_components, )
 
 mix = np.roll(mix, _start_pos, axis=0)
 
-#%%
+# %%
 # =============================================================================
 # _comp_area = np.empty(_n_components)
 # for _z in range(_n_components):
@@ -364,7 +364,7 @@ _mix_reshaped = mix.reshape(_n_yy, _n_x, _n_components)
 
 vidju_nmf = AllMaps(_mix_reshaped, components=components,
                     components_sigma=sigma_kept,
-        title="Map of component's contribution")
+                    title="Map of component's contribution")
 plt.suptitle("Resluts of NMF")
 # %%
 # =============================================================================
@@ -458,7 +458,7 @@ _xcolumn_name, _ycolumn_name = ([origins.columns[i][1] for i in _scan_axes])
 if initialization['AbsoluteScale'] == True:
     scaling = {'vmin': 0, 'vmax': 1}
 else:
-    scaling={}
+    scaling = {}
 for _i in range(_n_components):
     sns.heatmap(_mix_reshaped[:, :, _i], ax=_ax[_i],
                 cmap="Spectral_r", annot=False, **scaling)
@@ -466,10 +466,10 @@ for _i in range(_n_components):
     _ax[_i].set_title(f'Component {_i}', color=color_set.to_rgba(_i),
                       fontweight='extra bold')
     try:
-    #    _y_ticks = [str(int(x))+'um' for x in
-    #                np.asarray(origins[_ycolumn_name].iloc[:_n_x*_n_y:_n_x])]
-    #    _x_ticks = [str(int(x))+'um' for x in
-    #                np.asarray(origins[_xcolumn_name].iloc[:_n_x])]
+        #    _y_ticks = [str(int(x))+'um' for x in
+        #                np.asarray(origins[_ycolumn_name].iloc[:_n_x*_n_y:_n_x])]
+        #    _x_ticks = [str(int(x))+'um' for x in
+        #                np.asarray(origins[_xcolumn_name].iloc[:_n_x])]
         _x_ticks = origins.xs(_xcolumn_name, level=1,
                               axis=1).to_numpy().ravel()[:_n_x]
         _y_ticks = origins.xs(_ycolumn_name, level=1,
@@ -478,8 +478,10 @@ for _i in range(_n_components):
         _pos_y = _ax[_i].get_yticks()
         _xlabels = [str(x) for x in _x_ticks[::int(np.ceil(_n_x/len(_pos_x)))]]
         _ylabels = [str(y) for y in _y_ticks[::int(np.ceil(_n_y/len(_pos_y)))]]
-        _ax[_i].set_xticklabels(_xlabels, rotation=45, ha="right", fontstretch=50)
-        _ax[_i].set_yticklabels(_ylabels, rotation=0, ha="right", fontstretch=50)
+        _ax[_i].set_xticklabels(_xlabels, rotation=45,
+                                ha="right", fontstretch=50)
+        _ax[_i].set_yticklabels(_ylabels, rotation=0,
+                                ha="right", fontstretch=50)
         _ax[_i].set_xlabel(_xcolumn_name+"[µm]")
         _ax[_i].set_ylabel(_ycolumn_name+"[µm]")
     except:
@@ -494,10 +496,10 @@ fig.canvas.mpl_connect('button_press_event', onclick)
 # =============================================================================
 if initialization["save_data"]:
     _basic_mix = pd.DataFrame(
-            np.copy(mix),
-            columns=[f"mixing coeff. for the component {l}"
-                     for l in np.arange(mix.shape[1])]
-            )
+        np.copy(mix),
+        columns=[f"mixing coeff. for the component {l}"
+                 for l in np.arange(mix.shape[1])]
+    )
     _save_filename_extension = (f"_{_n_components}NMFcomponents_from"
                                 f".csv")
     _save_filename_folder = '/'.join(x for x in filename.split('/')[:-1])+'/'\
@@ -506,42 +508,13 @@ if initialization["save_data"]:
         os.mkdir(_save_filename_folder)
 
     _basic_mix.to_csv(
-            f"{_save_filename_folder}MixingCoeffs{_save_filename_extension}",
-            sep=';', index=False)
+        f"{_save_filename_folder}MixingCoeffs{_save_filename_extension}",
+        sep=';', index=False)
     _save_components = pd.DataFrame(
-            components.T, index=sigma_kept,
-            columns=[f"Component{_i}" for _i in np.arange(_n_components)])
+        components.T, index=sigma_kept,
+        columns=[f"Component{_i}" for _i in np.arange(_n_components)])
     _save_components.index.name = 'Raman shift in cm-1'
     _save_components.to_csv(
-            f"{_save_filename_folder}Components{_save_filename_extension}",
-            sep=';')
-# =============================================================================
-# #%%
-# deviation_raw = np.std(spectra_kept, axis=0)
-# deviation_norm = np.std(b_corr_spectra, axis=0)
-# fig, ax1 = plt.subplots()
-# ax2 = ax1.twinx()
-#
-# deviation_line, = ax1.plot(sigma_kept, deviation_norm, 'b')
-# med_sp_line, = ax2.plot(sigma_kept, np.median(mock_sp3, axis=0), 'r')
-# ax1.legend((deviation_line, med_sp_line),
-#            ("standard deviation of baseline corrected spectra",
-#             "median spectra"))
-# #plt.title("comparaison of standard deviations\n"
-# #          "raw(blue/left) vs normalalized (red/right)")
-# plt.show()
-# #%%
-# deviation_raw = np.std(b_corr_spectra, axis=0)
-# deviation_norm = np.std(spectra_cleaned, axis=0)
-# fig, ax1 = plt.subplots()
-# ax2 = ax1.twinx()
-#
-# b_corr_std_line, = ax1.plot(sigma_kept, deviation_raw, 'b')
-# renorm_std_line, = ax2.plot(sigma_kept, deviation_norm, 'r')
-#
-# ax1.legend((b_corr_std_line, renorm_std_line),
-#            ("normalized+baseline corrected", "blue normalized over area"))
-# ax1.set_title("comparaison of standard deviations")
-# plt.show()
-#
-# =============================================================================
+        f"{_save_filename_folder}Components{_save_filename_extension}",
+        sep=';')
+
