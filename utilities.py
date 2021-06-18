@@ -18,6 +18,83 @@ from scipy import sparse
 from scipy.ndimage import median_filter
 from scipy.optimize import minimize_scalar
 from scipy.interpolate import interp1d
+from tqdm import tqdm
+from timeit import default_timer as time
+
+
+def remove_CRs(mock_sp3, sigma_kept, _n_x=0, _n_y=0, **initialization):
+    # a bit higher then median, or the area:
+    scaling_koeff = np.trapz(mock_sp3, x=sigma_kept, axis=-1)[:, np.newaxis]
+    mock_sp3 /= np.abs(scaling_koeff)
+    normalized_spectra = np.copy(mock_sp3)
+    # construct the footprint pointing to the pixels surrounding any given pixel:
+    kkk = np.zeros((2*(_n_x+1) + 1, 1))
+    # does this value change anything?
+    kkk[[0, 1, 2, _n_x-1, _n_x+1, -3, -2, -1]] = 1
+
+    # each pixel has the median value of its surrounding neighbours:
+    median_spectra3 = median_filter(mock_sp3, footprint=kkk)
+
+    # I will only take into account the positive values (CR):
+    coarsing_diff = (mock_sp3 - median_spectra3)
+
+    # find the highest differences between the spectra and its neighbours:
+    bad_neighbour = np.quantile(coarsing_diff, 0.99, axis=-1)
+    # The find the spectra where the bad neighbour is very bad:
+    # The "very bad" limit is set here at 30*standard deviation (why not?):
+    basic_candidates = np.nonzero(coarsing_diff > 40*np.std(bad_neighbour))
+    sind = basic_candidates[0]  # the spectra containing very bad neighbours
+    rind = basic_candidates[1]  # each element from the "very bad neighbour"
+    if len(sind) > 0:
+        # =====================================================================
+        #               We want to extend the "very bad neighbour" label
+        #           to ext_size adjecent family members in each such spectra:
+        # =====================================================================
+        npix = len(sigma)
+        ext_size = int(npix/50)
+        if ext_size % 2 != 1:
+            ext_size += 1
+        extended_sind = np.stack((sind, )*ext_size, axis=-1).reshape(
+            len(sind)*ext_size,)
+        rind_stack = tuple()
+        for ii in np.arange(-(ext_size//2), ext_size//2+1):
+            rind_stack += (rind + ii, )
+        extended_rind = np.stack(rind_stack, axis=-1).reshape(
+            len(rind)*ext_size,)
+        # The mirror approach for family members close to the border:
+        extended_rind[np.nonzero(extended_rind < 0)] =\
+            -extended_rind[np.nonzero(extended_rind < 0)]
+        extended_rind[np.nonzero(extended_rind > len(sigma_kept)-1)] =\
+            (len(sigma_kept)-1)*2 -\
+            extended_rind[np.nonzero(extended_rind > len(sigma_kept)-1)]
+        # remove duplicates (https://stackoverflow.com/a/36237337/9368839):
+        _base = extended_sind.max()+1
+        _combi = extended_rind + _base * extended_sind
+        _vall, _indd = np.unique(_combi, return_index=True)
+        _indd.sort()
+        extended_sind = extended_sind[_indd]
+        extended_rind = extended_rind[_indd]
+        other_candidates = (extended_sind, extended_rind)
+        mock_sp3[other_candidates] = median_spectra3[other_candidates]
+
+        CR_cand_ind = np.unique(sind)
+        #CR_cand_ind = np.arange(len(spectra_kept))
+        _ss = np.stack((normalized_spectra[CR_cand_ind],
+                        mock_sp3[CR_cand_ind]), axis=-1)
+        check_CR_candidates = NavigationButtons(sigma_kept, _ss,
+                                                autoscale_y=True,
+                                                title=[
+                                                    f"indice={i}" for i in CR_cand_ind],
+                                                label=['normalized spectra',
+                                                       'median correction'])
+        if len(CR_cand_ind) > 10:
+            plt.figure()
+            sns.violinplot(y=rind)
+            plt.title("Distribution of Cosmic Rays")
+            plt.ylabel("CCD pixel struck")
+    else:
+        print("No Cosmic Rays found!")
+    return mock_sp3
 
 
 class AdjustCR_SearchSensitivity(object):
@@ -275,19 +352,22 @@ def baseline_als(y, lam=1e5, p=5e-5, niter=12):
             z = sparse.linalg.spsolve(Z, w*yi)
             w = p * (yi > z) + (1-p) * (yi < z)
         return z
-
+    _start = time()
+    print("\nstarting the baseline correction..."
+          f"\n(be patient, this may take some time...)")
     if y.ndim == 1:
         b_line = _one_bl(y)
     elif y.ndim == 2:
         b_line = np.asarray(Parallel(n_jobs=-1)(delayed(_one_bl)(y[i])
-                                                for i in range(y.shape[0])))
+                                                for i in tqdm(range(y.shape[0]))))
     else:
         warn("This only works for 1D or 2D arrays")
-
+    _end = time()
+    print(f"baseline correction done in {_end - _start:.2f}s")
     return b_line
 
 
-def slice_lr(spectra, sigma=None, pos_left=None, pos_right=None):
+def slice_lr(spectra, sigma=None, **kwargs):
     '''
     Several reasons may make you want to apply the slicing.
 
@@ -329,6 +409,7 @@ def slice_lr(spectra, sigma=None, pos_left=None, pos_right=None):
     if sigma is None:
         sigma = np.arange(spectra.shape[-1])
 
+    pos_left, pos_right = kwargs.get("SliceValues", (None, None))
     # If you pass a negative number as the right position:
     if isinstance(pos_right, (int, float)):
         if pos_right < 0:
@@ -345,6 +426,18 @@ def slice_lr(spectra, sigma=None, pos_left=None, pos_right=None):
     spectra_kept = np.asarray(spectra[..., _condition], order='C')
 
     return spectra_kept, sigma_kept
+
+
+def skip_ud(spectra, _n_x=0, **kwargs):
+    """Removing the lines from top and/or bottom of the map"""
+    skip_lines_up = kwargs.get("NumberOfLinesToSkip_Beggining", 0)
+    skip_lines_down = kwargs.get("NumberOfLinesToSkip_End", 0)
+    _start_pos = skip_lines_up * _n_x
+    if skip_lines_down == 0:
+        _end_pos = None
+    else:
+        _end_pos = -np.abs(skip_lines_down) * _n_x
+    return spectra[_start_pos:_end_pos]
 
 
 def pV(x, h=30, x0=0, w=10, factor=0.5):

@@ -285,9 +285,9 @@ def read_WDF(filename, verbose=False):
                           'so it could be read\n'
                           'the same way as other scan types'
                           '(from left to right, and from top to bottom)')
-            if map_params['MapAreaType'] == 'StreamLine':
+            if map_params['MapAreaType'] in ['Alternating', 'StreamLine']:
                 spectra = spectra.reshape(n_x, n_y, -1)
-                spectra = np.rot90(spectra, axes=(0, 1)).ravel()
+                spectra = np.rot90(spectra, axes=(0, 1)).reshape(n_x*n_y, -1)
 
     name = 'XLST'
     gen = [i for i, x in enumerate(block_names) if x == name]
@@ -358,8 +358,8 @@ def read_WDF(filename, verbose=False):
                                             else origin_values[set_n][xx]
                                             for xx in range(nspectra)]
                     origin_values[set_n] = np.asarray(origin_values[set_n])
-                if map_params['MapAreaType'] == 'StreamLine':
-                    ovl = origin_values[set_n].reshape(n_x, n_y, -1)
+                if map_params['MapAreaType']  in ['Alternating', 'StreamLine']:
+                    ovl = origin_values[set_n].reshape(n_x, n_y)
                     origin_values[set_n] = np.rot90(ovl, axes=(0, 1)).ravel()
     if verbose:
         print('\n\n\n')
