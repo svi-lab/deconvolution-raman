@@ -20,6 +20,7 @@ from scipy.optimize import minimize_scalar
 from scipy.interpolate import interp1d
 from tqdm import tqdm
 from timeit import default_timer as time
+import seaborn as sns
 
 
 def remove_CRs(mock_sp3, sigma_kept, _n_x=0, _n_y=0, **initialization):
@@ -50,7 +51,7 @@ def remove_CRs(mock_sp3, sigma_kept, _n_x=0, _n_y=0, **initialization):
         #               We want to extend the "very bad neighbour" label
         #           to ext_size adjecent family members in each such spectra:
         # =====================================================================
-        npix = len(sigma)
+        npix = len(sigma_kept)
         ext_size = int(npix/50)
         if ext_size % 2 != 1:
             ext_size += 1

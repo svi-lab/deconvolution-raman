@@ -14,6 +14,7 @@ from timeit import default_timer as time
 from read_WDF import convert_time, read_WDF
 from warnings import warn
 import utilities as ut
+import preprocessing as pp
 
 
 sns.set()
@@ -31,19 +32,21 @@ That'_s it!
 # %%
 # -----------------------Choose a file-----------------------------------------
 
-folder_name = "./Data/Chloe/"
-file_n = "cBN20-532streamline-x20-2s-carto1.wdf"
-
+folder_name = "../../RamanData/Chloe/"
+# folder_name = "./Data/Giuseppe/"
+# file_n = "cBN20-532streamline-x20-2s-carto1.wdf"
+# file_n = "TFCD_ITOcell_532nm_p100_1s_carto_z20.wdf"
+file_n = "LFeige-532streamline-x20-speedmode-carto1.wdf"
 filename = folder_name + file_n
 
 initialization = {'SliceValues': [None, None],  # Use None to count all
-                  'NMF_NumberOfComponents': 3,
+                  'NMF_NumberOfComponents': 6,
                   'PCA_components': 25,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
                   'NumberOfLinesToSkip_End': 0,
-                  'BaselineCorrection': True,
+                  'BaselineCorrection': False,
                   'CosmicRayCorrection': True,
                   # Nearest neighbour method
                   # To use only in maps where step sizes are smaller then
@@ -73,6 +76,8 @@ spectra, sigma, params, map_params, origins =\
     you can use the imported "convert_time" function_
 """
 assert params['MeasurementType'] == 'Map', 'This script is intended for maps'
+
+
 # %%
 # put the retreived number of measurements in a variable
 # with a shorter name, as it will be used quite often:
@@ -122,6 +127,7 @@ _n_y -= initialization['NumberOfLinesToSkip_End'] -\
 spectra2 = np.copy(spectra)
 spectra2.resize(_n_y, _n_x, len(sigma))
 spectra = spectra2.reshape(_n_x*_n_y, -1)
+spectra = pp.correct_saturated(spectra, (_n_y, _n_x))
 del spectra2
 # %%
 # =============================================================================
@@ -185,11 +191,13 @@ else:
 # =============================================================================
 print(f"smoothing with PCA ({initialization['PCA_components']} components)")
 # =============================================================================
-pca = decomposition.PCA(n_components=initialization['PCA_components'])
+mock_sp3 /= np.max(mock_sp3, axis=-1, keepdims=True)
+pca = decomposition.PCA(n_components=initialization['PCA_components']+10)
 spectra_reduced = pca.fit_transform(mock_sp3)
 # spectra_reduced = np.dot(mock_sp3 - np.mean(mock_sp3, axis=0), pca.components_.T)
 
 spectra_denoised = pca.inverse_transform(spectra_reduced)
+spectra_denoised -= np.min(spectra_denoised, axis=-1, keepdims=True)
 # spectra_denoised = np.dot(spectra_reduced, pca.components_)+np.mean(mock_sp3, axis=0)
 
 vidji_pca = ut.AllMaps(spectra_reduced.reshape(_n_y, _n_x, -1),
@@ -207,7 +215,8 @@ see_all_denoised = ut.NavigationButtons(sigma_kept, _s, autoscale_y=True,
                                      figsize=(12, 12))
 see_all_denoised.figr.suptitle("PCA denoising result")
 
-
+del b_corr_spectra
+del mock_sp3
 # %%
 # =============================================================================
 #                                   NMF step
@@ -215,7 +224,7 @@ see_all_denoised.figr.suptitle("PCA denoising result")
 
 _n_components = initialization['NMF_NumberOfComponents']
 nmf_model = decomposition.NMF(n_components=_n_components, init='nndsvda',
-                              max_iter=7, l1_ratio=1)
+                              max_iter=7, l1_ratio=0.5, alpha=2, regularization='components')
 _start = time()
 # print('starting nmf... (be patient, this may take some time...)')
 mix = nmf_model.fit_transform(spectra_denoised)
@@ -228,6 +237,7 @@ print(f'nmf done in {_end - _start:.2f}s')
 # =============================================================================
 #                    preparing the mixture coefficients
 # =============================================================================
+_start_pos = 0
 
 mix.resize((_n_x*_n_y), _n_components, )
 
@@ -254,7 +264,7 @@ color_set = ScalarMappable(norm=col_norm, cmap="hsv")
 fi, _ax = plt.subplots(int(np.floor(np.sqrt(_n_components))),
                        int(np.ceil(_n_components /
                                    np.floor(np.sqrt(_n_components))
-                                   )))
+                                   )), sharex=True, sharey=False)
 if _n_components > 1:
     _ax = _ax.ravel()
 else:
@@ -299,7 +309,7 @@ def onclick(event):
 
         if event.dblclick:
             ff, aa = plt.subplots()
-            aa.scatter(sigma_kept, spectra_cleaned[spec_num], alpha=0.3,
+            aa.scatter(sigma_kept, spectra_denoised[spec_num], alpha=0.3,
                        label=f'(cleaned) spectrum n°{broj}')
             aa.plot(sigma_kept, spectra_reconstructed[broj], '--k',
                     label='reconstructed spectrum')
