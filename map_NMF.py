@@ -46,7 +46,7 @@ initialization = {'SliceValues': [None, None],  # Use None to count all
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
                   'NumberOfLinesToSkip_End': 0,
-                  'BaselineCorrection': False,
+                  'BaselineCorrection': True,
                   'CosmicRayCorrection': True,
                   # Nearest neighbour method
                   # To use only in maps where step sizes are smaller then
