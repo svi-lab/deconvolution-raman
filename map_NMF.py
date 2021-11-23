@@ -61,24 +61,25 @@ def memory_check(filesize, suffix="B"):
 # %%
 # -----------------------Choose a file-----------------------------------------
 
-folder_name = "../../RamanData/Chloe/"
+folder_name = "../../RamanData/Driffa/matteo/"
 # folder_name = "./Data/Giuseppe/"
 # file_n = "cBN20-532streamline-x20-2s-carto1.wdf"
 # file_n = "TFCD_ITOcell_532nm_p100_1s_carto_z20.wdf"
 file_n = "LFeige-532streamline-x20-speedmode-carto1.wdf"
+file_n = "Echref2 -100nmTiO2onPLC-F80-surface-3s-step0point2x0point2-obj100-P100-532nm-origine.wdf"
 filename = folder_name + file_n
 
 memory_check(os.path.getsize(filename))
 
 initialization = {'SliceValues': [None, None],  # Use None to count all
-                  'NMF_NumberOfComponents': 6,
+                  'NMF_NumberOfComponents': 4,
                   'PCA_components': 25,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
                   'NumberOfLinesToSkip_End': 0,
                   'BaselineCorrection': False,
-                  'CosmicRayCorrection': True,
+                  'CosmicRayCorrection': False,
                   # Nearest neighbour method
                   # To use only in maps where step sizes are smaller then
                   # Sample's feature sizes (oversampled maps)
@@ -255,7 +256,7 @@ del mock_sp3
 
 _n_components = initialization['NMF_NumberOfComponents']
 nmf_model = decomposition.NMF(n_components=_n_components, init='nndsvda',
-                              max_iter=7, l1_ratio=0.5, alpha=2, regularization='components')
+                              max_iter=77, alpha_W=0.01, alpha_H=0.1)
 _start = time()
 # print('starting nmf... (be patient, this may take some time...)')
 mix = nmf_model.fit_transform(spectra_denoised)
