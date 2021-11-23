@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # %%
 import os
+import psutil
 import numpy as np
 import pandas as pd
 from sklearn import decomposition
@@ -29,6 +30,34 @@ Set the initialization dictionary values
 That'_s it!
 
 '''
+
+def change_unit(bsize, factor=1024, suffix="B"):
+    """
+    Scale bytes to its proper format
+    e.g:
+        1253656 => '1.20MB'
+        1253656678 => '1.17GB'
+    """
+    for unit in ["", "K", "M", "G", "T", "P"]:
+        if bsize < factor:
+            return bsize, unit+suffix
+        else:
+            bsize /= factor
+
+def memory_check(filesize, suffix="B"):
+    """
+    Compare the available os memory with the objects' memory
+    """
+
+    fsize, fsize_unit = change_unit(filesize)
+    print(f"Objects' size is: {fsize:.2f} {fsize_unit}")
+
+    memory_data = psutil.virtual_memory()
+    msize, msize_unit = change_unit(memory_data.available)
+    print(f"Available memory is {msize:.2f} {msize_unit}")
+
+
+
 # %%
 # -----------------------Choose a file-----------------------------------------
 
@@ -39,6 +68,8 @@ folder_name = "../../RamanData/Chloe/"
 file_n = "LFeige-532streamline-x20-speedmode-carto1.wdf"
 filename = folder_name + file_n
 
+memory_check(os.path.getsize(filename))
+
 initialization = {'SliceValues': [None, None],  # Use None to count all
                   'NMF_NumberOfComponents': 6,
                   'PCA_components': 25,
@@ -46,7 +77,7 @@ initialization = {'SliceValues': [None, None],  # Use None to count all
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
                   'NumberOfLinesToSkip_End': 0,
-                  'BaselineCorrection': True,
+                  'BaselineCorrection': False,
                   'CosmicRayCorrection': True,
                   # Nearest neighbour method
                   # To use only in maps where step sizes are smaller then

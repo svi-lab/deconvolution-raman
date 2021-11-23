@@ -8,10 +8,12 @@ Created on Thu Mar 25 18:50:13 2021
 import numpy as np
 from scipy import sparse, ndimage
 from scipy.optimize import minimize_scalar
+from sklearn import decomposition
 from joblib import delayed, Parallel
 from warnings import warn
 from tqdm import tqdm
-
+    
+    
 
 def find_barycentre(x: np.array, y: np.array, method: str = 'simple vectorized') -> (np.array, np.array):
     """Calculate the coordinates of the barycentre value.
