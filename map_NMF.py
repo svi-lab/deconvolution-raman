@@ -5,6 +5,9 @@ import psutil
 import numpy as np
 import pandas as pd
 from sklearn import decomposition
+from pymcr.mcr import McrAR
+from pymcr.regressors import NNLS, OLS
+from pymcr.constraints import ConstraintNonneg, ConstraintNorm
 from scipy.ndimage import median_filter
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
@@ -62,24 +65,26 @@ def memory_check(filesize, suffix="B"):
 # -----------------------Choose a file-----------------------------------------
 
 folder_name = "../../RamanData/Driffa/matteo/"
+# folder_name = "/home/dejan/Documents/RamanData/Maxime/CartosPlaques/M1CN/map_depth/"
 # folder_name = "./Data/Giuseppe/"
 # file_n = "cBN20-532streamline-x20-2s-carto1.wdf"
 # file_n = "TFCD_ITOcell_532nm_p100_1s_carto_z20.wdf"
 file_n = "LFeige-532streamline-x20-speedmode-carto1.wdf"
 file_n = "Echref2 -100nmTiO2onPLC-F80-surface-3s-step0point2x0point2-obj100-P100-532nm-origine.wdf"
+# file_n = "M1CN_Map_Reflex_7x7cm_depth2mm_Trunc2_CR_NF12_PCA.wdf"
 filename = folder_name + file_n
 
 memory_check(os.path.getsize(filename))
 
 initialization = {'SliceValues': [None, None],  # Use None to count all
-                  'NMF_NumberOfComponents': 4,
+                  'NMF_NumberOfComponents': 8,
                   'PCA_components': 25,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
                   'NumberOfLinesToSkip_End': 0,
                   'BaselineCorrection': False,
-                  'CosmicRayCorrection': False,
+                  'CosmicRayCorrection': True,
                   # Nearest neighbour method
                   # To use only in maps where step sizes are smaller then
                   # Sample's feature sizes (oversampled maps)
@@ -184,7 +189,7 @@ plt.suptitle("raw spectra (log_scale)")
 # =============================================================================
 if initialization['BaselineCorrection']:
 
-    b_line = ut.baseline_als(spectra_kept, p=1e-3, lam=100*len(sigma_kept))
+    b_line = ut.baseline_als(spectra_kept, p=1e-3, lam=3000*len(sigma_kept))
 
     b_corr_spectra = spectra_kept - b_line
     # Remove the eventual offsets:
@@ -253,15 +258,32 @@ del mock_sp3
 # =============================================================================
 #                                   NMF step
 # =============================================================================
-
+# initialization['NMF_NumberOfComponents'] = 6
+norma  = np.sum(spectra_denoised, axis=-1, keepdims=True)
+normalized_spectra = spectra_denoised / norma
+#%%
 _n_components = initialization['NMF_NumberOfComponents']
 nmf_model = decomposition.NMF(n_components=_n_components, init='nndsvda',
-                              max_iter=77, alpha_W=0.01, alpha_H=0.1)
+                              max_iter=7)#, alpha_W=0.01, alpha_H=0.1)
 _start = time()
 # print('starting nmf... (be patient, this may take some time...)')
-mix = nmf_model.fit_transform(spectra_denoised)
-components = nmf_model.components_
-reconstructed_spectra = nmf_model.inverse_transform(mix)
+mix = nmf_model.fit_transform(normalized_spectra)
+mix_norma = np.sum(mix, axis=-1, keepdims=True)
+mix /= mix_norma
+# components = nmf_model.components_
+#%%
+
+# Note constraint order matters
+mcrar = McrAR(max_iter=100, st_regr='NNLS', c_regr='OLS',
+              c_constraints=[ConstraintNonneg(), ConstraintNorm()],
+              st_constraints=[ConstraintNonneg()])
+
+mcrar.fit(normalized_spectra, C=mix)
+#%%
+# components_norma = np.sum(components, axis=-1, keepdims=True)
+components = mcrar.ST_opt_
+mix = mcrar.C_opt_
+reconstructed_spectra = mcrar.D_opt_
 _end = time()
 print(f'nmf done in {_end - _start:.2f}s')
 
@@ -341,7 +363,7 @@ def onclick(event):
 
         if event.dblclick:
             ff, aa = plt.subplots()
-            aa.scatter(sigma_kept, spectra_denoised[spec_num], alpha=0.3,
+            aa.scatter(sigma_kept, normalized_spectra[spec_num], alpha=0.3,
                        label=f'(cleaned) spectrum n°{broj}')
             aa.plot(sigma_kept, spectra_reconstructed[broj], '--k',
                     label='reconstructed spectrum')
