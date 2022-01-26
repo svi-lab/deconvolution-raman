@@ -567,6 +567,7 @@ class AllMaps(object):
         if components is not None:
             #assert len(components) == map_spectra.shape[-1], "Check your components"
             self.components = components
+            self.last_frame = len(self.components)
             if components_sigma is None:
                 self.components_sigma = np.arange(components.shape[-1])
             else:

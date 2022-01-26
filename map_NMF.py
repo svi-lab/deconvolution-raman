@@ -89,7 +89,7 @@ initialization = {'SliceValues': [None, None],  # Use None to count all
                   # To use only in maps where step sizes are smaller then
                   # Sample's feature sizes (oversampled maps)
                   'AbsoluteScale': False,  # what type of colorbar to use
-                  "save_data": False}
+                  "save_data": True}
 # %%
 # Reading the data from the .wdf file
 spectra, sigma, params, map_params, origins =\
