@@ -64,14 +64,14 @@ def memory_check(filesize, suffix="B"):
 # %%
 # -----------------------Choose a file-----------------------------------------
 
-folder_name = "../../RamanData/Driffa/matteo/"
-# folder_name = "/home/dejan/Documents/RamanData/Maxime/CartosPlaques/M1CN/map_depth/"
+# folder_name = "../../RamanData/Driffa/matteo/"
+folder_name = "/home/dejan/Documents/RamanData/Maxime/CartosPlaques/M1CN/map_depth/"
 # folder_name = "./Data/Giuseppe/"
 # file_n = "cBN20-532streamline-x20-2s-carto1.wdf"
 # file_n = "TFCD_ITOcell_532nm_p100_1s_carto_z20.wdf"
-file_n = "LFeige-532streamline-x20-speedmode-carto1.wdf"
-file_n = "Echref2 -100nmTiO2onPLC-F80-surface-3s-step0point2x0point2-obj100-P100-532nm-origine.wdf"
-# file_n = "M1CN_Map_Reflex_7x7cm_depth2mm_Trunc2_CR_NF12_PCA.wdf"
+# file_n = "LFeige-532streamline-x20-speedmode-carto1.wdf"
+# file_n = "Echref2 -100nmTiO2onPLC-F80-surface-3s-step0point2x0point2-obj100-P100-532nm-origine.wdf"
+file_n = "M1CN_Map_Reflex_7x7cm_depth2mm_Trunc2_CR_NF12_PCA.wdf"
 filename = folder_name + file_n
 
 memory_check(os.path.getsize(filename))
@@ -84,12 +84,12 @@ initialization = {'SliceValues': [None, None],  # Use None to count all
                   # Put in the int number from 0 to _n_y - previous element:
                   'NumberOfLinesToSkip_End': 0,
                   'BaselineCorrection': False,
-                  'CosmicRayCorrection': True,
+                  'CosmicRayCorrection': False,
                   # Nearest neighbour method
                   # To use only in maps where step sizes are smaller then
                   # Sample's feature sizes (oversampled maps)
                   'AbsoluteScale': False,  # what type of colorbar to use
-                  "save_data": True}
+                  "save_data": False}
 # %%
 # Reading the data from the .wdf file
 spectra, sigma, params, map_params, origins =\
@@ -229,7 +229,7 @@ else:
 print(f"smoothing with PCA ({initialization['PCA_components']} components)")
 # =============================================================================
 mock_sp3 /= np.max(mock_sp3, axis=-1, keepdims=True)
-pca = decomposition.PCA(n_components=initialization['PCA_components']+10)
+pca = decomposition.PCA(n_components=initialization['PCA_components'])
 spectra_reduced = pca.fit_transform(mock_sp3)
 # spectra_reduced = np.dot(mock_sp3 - np.mean(mock_sp3, axis=0), pca.components_.T)
 
@@ -266,13 +266,13 @@ _n_components = initialization['NMF_NumberOfComponents']
 nmf_model = decomposition.NMF(n_components=_n_components, init='nndsvda',
                               max_iter=7)#, alpha_W=0.01, alpha_H=0.1)
 _start = time()
-# print('starting nmf... (be patient, this may take some time...)')
+print('starting nmf... (be patient, this may take some time...)')
 mix = nmf_model.fit_transform(normalized_spectra)
 mix_norma = np.sum(mix, axis=-1, keepdims=True)
 mix /= mix_norma
 # components = nmf_model.components_
 #%%
-
+print('renormalizing components and coefficients...')
 # Note constraint order matters
 mcrar = McrAR(max_iter=100, st_regr='NNLS', c_regr='OLS',
               c_constraints=[ConstraintNonneg(), ConstraintNorm()],
