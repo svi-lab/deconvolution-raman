@@ -80,7 +80,7 @@ initialization = {'SliceValues': [None, None],  # Use None to count all
                   'NMF_NumberOfComponents': 8,
                   'PCA_components': 25,
                   # Put in the int number from 0 to _n_y:
-                  'NumberOfLinesToSkip_Beggining': 0,
+                  'NumberOfLinesToSkip_Beggining': 2,
                   # Put in the int number from 0 to _n_y - previous element:
                   'NumberOfLinesToSkip_End': 0,
                   'BaselineCorrection': False,
@@ -157,15 +157,15 @@ if (initialization['NumberOfLinesToSkip_Beggining']
     raise SystemExit('You chose to skip more lines than present in the scan.\n'
                      'Please revise your initialization parameters')
 # readjust the number of rows:
-_n_y -= initialization['NumberOfLinesToSkip_End'] -\
+_n_y -= initialization['NumberOfLinesToSkip_End'] +\
     initialization['NumberOfLinesToSkip_Beggining']
 
 
-spectra2 = np.copy(spectra)
-spectra2.resize(_n_y, _n_x, len(sigma))
-spectra = spectra2.reshape(_n_x*_n_y, -1)
-spectra = pp.correct_saturated(spectra, (_n_y, _n_x))
-del spectra2
+# spectra2 = np.copy(spectra)
+# spectra2.resize(_n_y, _n_x, len(sigma))
+# spectra = spectra2.reshape(_n_x*_n_y, -1)
+# spectra = pp.correct_saturated(spectra, (_n_y, _n_x))
+# del spectra2
 # %%
 # =============================================================================
 #                               SLICING....
