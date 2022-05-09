@@ -65,13 +65,14 @@ def memory_check(filesize, suffix="B"):
 # -----------------------Choose a file-----------------------------------------
 
 # folder_name = "../../RamanData/Driffa/matteo/"
-folder_name = "/home/dejan/Documents/RamanData/Maxime/CartosPlaques/M1CN/map_depth/"
+folder_name = "/home/dejan/Documents/RamanData/Quentin/08-02-2022/"
 # folder_name = "./Data/Giuseppe/"
 # file_n = "cBN20-532streamline-x20-2s-carto1.wdf"
 # file_n = "TFCD_ITOcell_532nm_p100_1s_carto_z20.wdf"
 # file_n = "LFeige-532streamline-x20-speedmode-carto1.wdf"
 # file_n = "Echref2 -100nmTiO2onPLC-F80-surface-3s-step0point2x0point2-obj100-P100-532nm-origine.wdf"
-file_n = "M1CN_Map_Reflex_7x7cm_depth2mm_Trunc2_CR_NF12_PCA.wdf"
+# file_n = "M1CN_Map_Reflex_7x7cm_depth2mm_Trunc2_CR_NF12_PCA.wdf"
+file_n = "CM210_TA_TA-405nm_obj50-100_carto_Copy_Copy_Copy.wdf"
 filename = folder_name + file_n
 
 memory_check(os.path.getsize(filename))
@@ -80,7 +81,7 @@ initialization = {'SliceValues': [None, None],  # Use None to count all
                   'NMF_NumberOfComponents': 8,
                   'PCA_components': 25,
                   # Put in the int number from 0 to _n_y:
-                  'NumberOfLinesToSkip_Beggining': 2,
+                  'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
                   'NumberOfLinesToSkip_End': 0,
                   'BaselineCorrection': False,
@@ -130,7 +131,7 @@ try:
     # the two relevant dimensions will be called X and Y
     # regardless if one of them is Z in reality (for slices)
     _n_x, _n_y = map_params['NbSteps'][_scan_axes]
-except (NameError, KeyError):
+except (NameError, KeyError, ValueError):
     while True:
         _n_x = int(input("Enter the total number of measurement points "
                          "along x-axis: "))
@@ -146,7 +147,7 @@ except (NameError, KeyError):
 
 try:
     _s_x, _s_y = map_params['StepSizes'][_scan_axes]
-except (NameError, KeyError):
+except (NameError, KeyError, ValueError):
     _s_x = int(input("Enter the size of the step along x-axis: "))
     _s_y = int(input("Enter the size of the step along y-axis: "))
     print("ok")
