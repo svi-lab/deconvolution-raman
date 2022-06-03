@@ -64,27 +64,27 @@ def memory_check(filesize, suffix="B"):
 # %%
 # -----------------------Choose a file-----------------------------------------
 
-# folder_name = "../../RamanData/Driffa/matteo/"
-folder_name = "/home/dejan/Documents/RamanData/Quentin/08-02-2022/"
+folder_name = "../../RamanData/Sirine/"
+# folder_name = "/home/dejan/Documents/RamanData/Quentin/08-02-2022/"
 # folder_name = "./Data/Giuseppe/"
 # file_n = "cBN20-532streamline-x20-2s-carto1.wdf"
 # file_n = "TFCD_ITOcell_532nm_p100_1s_carto_z20.wdf"
 # file_n = "LFeige-532streamline-x20-speedmode-carto1.wdf"
-# file_n = "Echref2 -100nmTiO2onPLC-F80-surface-3s-step0point2x0point2-obj100-P100-532nm-origine.wdf"
+# file_n = "map_interfaceG_532nm_obj100_p100-8s.wdf"
 # file_n = "M1CN_Map_Reflex_7x7cm_depth2mm_Trunc2_CR_NF12_PCA.wdf"
-file_n = "CM210_TA_TA-405nm_obj50-100_carto_Copy_Copy_Copy.wdf"
+file_n = "Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf"
 filename = folder_name + file_n
 
 memory_check(os.path.getsize(filename))
 
 initialization = {'SliceValues': [None, None],  # Use None to count all
-                  'NMF_NumberOfComponents': 8,
-                  'PCA_components': 25,
+                  'NMF_NumberOfComponents': 3,
+                  'PCA_components': 7,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
                   'NumberOfLinesToSkip_End': 0,
-                  'BaselineCorrection': False,
+                  'BaselineCorrection': True,
                   'CosmicRayCorrection': False,
                   # Nearest neighbour method
                   # To use only in maps where step sizes are smaller then
@@ -388,7 +388,7 @@ def onclick(event):
         print("you clicked outside the canvas, you bastard :)")
 
 
-_xcolumn_name, _ycolumn_name = ([origins.columns[i][1] for i in _scan_axes])
+
 
 #################################################################################
 ############## This formatting should be adapted case by case ###################
@@ -404,23 +404,27 @@ for _i in range(_n_components):
 #    _ax[_i].set_aspect(_s_y/_s_x)
     _ax[_i].set_title(f'Component {_i}', color=color_set.to_rgba(_i),
                       fontweight='extra bold')
-    try:
-        _x_ticks = origins.xs(_xcolumn_name, level=1,
-                              axis=1).to_numpy().ravel()[:_n_x]
-        _y_ticks = origins.xs(_ycolumn_name, level=1,
-                              axis=1).to_numpy().ravel()[::_n_x]
-        _pos_x = _ax[_i].get_xticks()
-        _pos_y = _ax[_i].get_yticks()
-        _xlabels = [str(x) for x in _x_ticks[::int(np.ceil(_n_x/len(_pos_x)))]]
-        _ylabels = [str(y) for y in _y_ticks[::int(np.ceil(_n_y/len(_pos_y)))]]
-        _ax[_i].set_xticklabels(_xlabels, rotation=45,
-                                ha="right", fontstretch=50)
-        _ax[_i].set_yticklabels(_ylabels, rotation=0,
-                                ha="right", fontstretch=50)
-        _ax[_i].set_xlabel(_xcolumn_name+"[µm]")
-        _ax[_i].set_ylabel(_ycolumn_name+"[µm]")
-    except:
-        pass
+    _xcolumn_name, _ycolumn_name = ([origins.columns[i] for i in _scan_axes])
+    if "R" in _xcolumn_name:
+        _ycolumn_name = origins.columns[3]
+    # try:
+    _x_ticks = origins[_xcolumn_name].to_numpy().ravel()[:_n_x]
+    _y_ticks = origins[_ycolumn_name].to_numpy().ravel()[::_n_x]
+    _pos_x = _ax[_i].get_xticks()
+    _pos_y = _ax[_i].get_yticks()
+    _xlabels = [str(x) for x in _x_ticks[::int(np.ceil(_n_x/len(_pos_x)))]]
+    _ylabels = [str(y) for y in _y_ticks[::int(np.ceil(_n_y/len(_pos_y)))]]
+    _ax[_i].set_xticks(_pos_x)
+    _ax[_i].set_xticklabels(_xlabels, rotation=45,
+                            ha="right", fontstretch=50)
+    _ax[_i].set_yticks(_pos_y)
+    _ax[_i].set_yticklabels(_ylabels, rotation=0,
+                            ha="right", fontstretch=50)
+    _ax[_i].set_xlabel(_xcolumn_name)
+    _ax[_i].set_ylabel(_ycolumn_name)
+
+    # except:
+    #     pass
 fig.suptitle('Heatmaps showing the abundance of individual components'
              ' throughout the scanned area.')
 fig.canvas.mpl_connect('button_press_event', onclick)

@@ -1034,7 +1034,7 @@ def long_correction(sigma, lambda_laser, T=30, T0=0):
     ----------
     sigma : numpy.ndarray
         Wavenumber in cm-1
-    lambda_inc : float
+    lambda_laser : float
         Laser wavelength in nm.
     T : float
         Actual temperature in °C
