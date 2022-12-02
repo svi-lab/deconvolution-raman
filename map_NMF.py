@@ -301,6 +301,7 @@ vidju_nmf = ut.AllMaps(_mix_reshaped, components=components,
                     components_sigma=sigma_kept,
                     title="Map of component's contribution")
 plt.suptitle("Resluts of NMF")
+
 # %%
 # =============================================================================
 #                    Plotting the components....
@@ -396,7 +397,7 @@ else:
     scaling = {}
 for _i in range(_n_components):
     sns.heatmap(_mix_reshaped[:, :, _i], ax=_ax[_i],
-                cmap="Spectral_r", annot=False, **scaling)
+                cmap="magma", annot=False, **scaling)
 #    _ax[_i].set_aspect(_s_y/_s_x)
     _ax[_i].set_title(f'Component {_i}', color=color_set.to_rgba(_i),
                       fontweight='extra bold')
