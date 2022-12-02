@@ -65,15 +65,10 @@ def memory_check(filesize, suffix="B"):
 # -----------------------Choose a file-----------------------------------------
 
 # folder_name = "../../RamanData/Sirine/"
+folder_name = "../../RamanData/Giuseppe/"
 # folder_name = "/home/dejan/Documents/RamanData/Quentin/08-02-2022/"
-folder_name = "../../RamanData/Thibault/St-Etienne/"
-# file_n = "cBN20-532streamline-x20-2s-carto1.wdf"
-# file_n = "TFCD_ITOcell_532nm_p100_1s_carto_z20.wdf"
-# file_n = "LFeige-532streamline-x20-speedmode-carto1.wdf"
-# file_n = "map_interfaceG_532nm_obj100_p100-8s.wdf"
-# file_n = "M1CN_Map_Reflex_7x7cm_depth2mm_Trunc2_CR_NF12_PCA.wdf"
-# file_n = "Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf"
-file_n = "L53902_30mW_405nm_obj100_p50_2s_livetrack_nuit_CRs.wdf"
+# folder_name = "../../RamanData/Thibault/St-Etienne/"
+file_n = "TFCD_ITOcell_532nm_p100_1s_depthslice.wdf"
 filename = folder_name + file_n
 
 memory_check(os.path.getsize(filename))

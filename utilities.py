@@ -251,7 +251,7 @@ def find_barycentre(x, y, method="trapz_minimize"):
             to_minimize_dh = np.abs(part_down - half)
             return to_minimize_ud**2+to_minimize_uh+to_minimize_dh
 
-        def find_x(X0, xx=xx, yy=yx, method=method):
+        def find_x(X0, xx=xx, yy=yy, method=method):
             part_left = np.trapz(yy[xx <= X0], x=xx[xx <= X0])
             part_right = np.trapz(yy[xx >= X0], x=xx[xx >= X0])
             to_minimize_lr = np.abs(part_left - part_right)
@@ -382,29 +382,31 @@ def slice_lr(spectra, sigma=None, **kwargs):
 
     Parameters:
     ---------------
-    spectra: N-D ndarray: your spectra. The last dimension is corresponds
-                          to one spectrum recorded at given position
-    sigma: 1D ndarray: your Raman shifts. Default is None, meaning
-                       that the slicing will be applied based on the
-                       indices of spectra, not Raman shift values
-    pos_left :int or float: position from which to start the slice. If sigma
-                      is given, pos_left is the lower Raman shift value,
-                      if not, it's the lower index of the spectra.
-    pos-right:int or float: same as for pos_left, but on the right side.
-                            It can be negative (means you count from the end)
+    spectra: N-D ndarray
+        your spectra. The last dimension corresponds
+        to one spectrum recorded at given position
+    sigma: 1D ndarray
+        your Raman shifts. Default is None, meaning
+        that the slicing will be applied based on the
+        indices of spectra, not Raman shift values
+    pos_left :int or float
+        position from which to start the slice. If sigma
+        is given, pos_left is the lower Raman shift value,
+        if not, it's the lower index of the spectra.
+    pos-right:int or float
+        same as for pos_left, but on the right side.
+        It can be negative (means you count from the end)
 
     Returns:
     ---------------
-    spectra_kept: N-D ndarray: your spectra containing only the zone of
-                              interest.
-                              spectra_kept.shape[:-1] = spectra_shape[:-1]
-                              spectra_kept.shape[-1] <= spectra.shape[-1]
-    sigma_kept: 1D ndarray: if sigma is given: your Raman shift values for the
-                            isolated zone.
-                            len(sigma_kept)=spectra_kept.shape[-1] <=
-                            len(sigma)=spectra.shape[-1]
-                            if sigma is not given: indices of the zone of
-                            interest.
+    spectra_kept: N-D ndarray
+        your spectra containing only the zone of interest.
+        spectra_kept.shape[:-1] = spectra_shape[:-1]
+        spectra_kept.shape[-1] <= spectra.shape[-1]
+    sigma_kept: 1D ndarray
+        if sigma is given: your Raman shift values for the isolated zone.
+        len(sigma_kept)=spectra_kept.shape[-1] <= len(sigma)=spectra.shape[-1]
+        if sigma is not given: indices of the zone of interest.
     '''
 
     if sigma is None:
@@ -533,25 +535,34 @@ class AllMaps(object):
     "components" parameter.
 
     Parameters:
-        map_spectra:3D ndarray : the spectra shaped as
-                                (n_lines, n_columns, n_wavenumbers)
-        sigma:1D ndarray : an array of wavenumbers (len(sigma)=n_wavenumbers)
-        components: 2D ndarray : The most evident use-case would be to
-                    help visualize the decomposition results from PCA or NMF.
-                    In this case, the function will plot the component with
-                    the corresponding map visualization of the given components'
-                    presence in each of the points in the map.
-                    So, in this case, your map_spectra would be for example
-                    the matrix of components' contributions in each spectrum, while
-                    the "components" array will be your actual components.
-                    In this case you can ommit your sigma values or set them to
-                    something like np.arange(n_components)
-        components_sigma: 1D ndarray: in the case explained above, this would be the
-                    actual wavenumbers
+    -----------
+        map_spectra: 3D ndarray
+            the spectra shaped as (n_lines, n_columns, n_wavenumbers)
+
+        sigma: 1D ndarray
+            an array of wavenumbers (len(sigma)=n_wavenumbers)
+
+        components: 2D ndarray
+            The most evident use-case would be to
+            help visualize the decomposition results from PCA or NMF.
+            In this case, the function will plot the component with
+            the corresponding map visualization of the given components'
+            presence in each of the points in the map.
+            So, in this case, your map_spectra would be for example
+            the matrix of components' contributions in each spectrum, while
+            the "components" array will be your actual components.
+            In this case you can ommit your sigma values or set them to
+            something like np.arange(n_components)
+
+        components_sigma: 1D ndarray
+            in the case explained above, this would be the actual wavenumbers
+
         **kwargs: dict: can only take 'title' as a key for the moment
 
-        Returns: The interactive visualization (you can scroll through sigma values
-                    with a slider, or using left/right keyboard arrows)
+        Returns:
+        --------
+            The interactive visualization (you can scroll through sigma values
+            with a slider, or using left/right keyboard arrows)
     '''
 
     def __init__(self, map_spectra, sigma=None, components=None, components_sigma=None, **kwargs):
