@@ -64,27 +64,28 @@ def memory_check(filesize, suffix="B"):
 # %%
 # -----------------------Choose a file-----------------------------------------
 
-folder_name = "../../RamanData/Sirine/"
+# folder_name = "../../RamanData/Sirine/"
 # folder_name = "/home/dejan/Documents/RamanData/Quentin/08-02-2022/"
-# folder_name = "./Data/Giuseppe/"
+folder_name = "../../RamanData/Thibault/St-Etienne/"
 # file_n = "cBN20-532streamline-x20-2s-carto1.wdf"
 # file_n = "TFCD_ITOcell_532nm_p100_1s_carto_z20.wdf"
 # file_n = "LFeige-532streamline-x20-speedmode-carto1.wdf"
 # file_n = "map_interfaceG_532nm_obj100_p100-8s.wdf"
 # file_n = "M1CN_Map_Reflex_7x7cm_depth2mm_Trunc2_CR_NF12_PCA.wdf"
-file_n = "Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf"
+# file_n = "Sirine_siO21mu-plr-532nm-obj100-2s-p100-slice--10-10.wdf"
+file_n = "L53902_30mW_405nm_obj100_p50_2s_livetrack_nuit_CRs.wdf"
 filename = folder_name + file_n
 
 memory_check(os.path.getsize(filename))
 
-initialization = {'SliceValues': [None, None],  # Use None to count all
-                  'NMF_NumberOfComponents': 3,
+initialization = {'SliceValues': [200, None],  # Use None to count all
+                  'NMF_NumberOfComponents': 4,
                   'PCA_components': 7,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
                   'NumberOfLinesToSkip_End': 0,
-                  'BaselineCorrection': True,
+                  'BaselineCorrection': False,
                   'CosmicRayCorrection': False,
                   # Nearest neighbour method
                   # To use only in maps where step sizes are smaller then

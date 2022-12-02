@@ -133,6 +133,7 @@ def read_WDF(filename, verbose=False):
                  5: 'InvertedColumns',
                  6: 'SurfaceProfile',
                  7: 'XyLine',
+                 64: 'LiveTrack',  # added as it seemed fit
                  66: 'StreamLine',
                  68: 'InvertedRows',
                  128: 'Slice'}
@@ -358,12 +359,13 @@ def read_WDF(filename, verbose=False):
                                             else origin_values[set_n][xx]
                                             for xx in range(nspectra)]
                     origin_values[set_n] = np.asarray(origin_values[set_n])
-                if map_params['MapAreaType']  in ['Alternating', 'StreamLine']:
+                if map_params['MapAreaType'] in ['Alternating', 'StreamLine']:
                     ovl = origin_values[set_n].reshape(n_x, n_y)
                     origin_values[set_n] = np.rot90(ovl, axes=(0, 1)).ravel()
     if verbose:
         print('\n\n\n')
     origins = pd.DataFrame(origin_values.T,
-                           columns=[f"{x} ({d})" for (x, d) in zip(origin_labels, origin_set_units)])
+                           columns=[f"{x} ({d})" for (x, d)
+                                    in zip(origin_labels, origin_set_units)])
 
     return (spectra, x_values, params, map_params, origins)
