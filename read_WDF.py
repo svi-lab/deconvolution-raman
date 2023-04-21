@@ -7,89 +7,158 @@ import pandas as pd
 
 
 def convert_time(t):
-    '''
-    Takes the Windows 64bit timestamp and converts it
-    to human readable format
+    """Convert the Windows 64bit timestamp to human readable format.
 
     Input:
+    -------
         t: timestamp in W64 format (default for .wdf files)
     Output:
+    -------
         string formatted to suit local settings
 
     Example:
-        >>>time_of_spectrum_recording =
+    -------
+        >>> time_of_spectrum_recording =
           [convert_time(x) for x in origins.iloc[:,4]]
 
         should give you the list with the times on which
         each specific spectrum was recorded
-        '''
+    """
     return time.strftime('%c', time.gmtime((t/1e7-11644473600)))
 
 
 def read_WDF(filename, verbose=False):
-    '''
-    Reads data from the binary .wdf file
-    and returns it in form of five variables
+    """Read data from the binary .wdf file.
 
-    Example:
-         >>>spectra, x_values, params, map_params, origins =
-         read_WDF(filename)
+    The data is returned in form of five variables.
 
-    Input:
-        filename: The complete (relative or absolute) path to the file
+    Example
+    -------
+    >>> spectra, x_values, params, map_params, origins = read_WDF(filename)
 
-    Output:
-        spectra:     numpy array contaiing all the recorded spectra
-        x_values:    numpy array containing the raman shifts
-        params:      dictionary containing measurement parameters
-        map_params:  dictionary containing map parameters
-        origins:     pandas dataframe containing the spatio-temporal
-                     coordinates of each recording.
-                     Note that it has triple column names
-                     (label, data type, data units)
-    '''
+    Input
+    ------
+    filename: str
+        The complete (relative or absolute) path to the file
 
-    DATA_TYPES = ['Arbitrary', 'Spectral', 'Intensity',
-                  'SpatialX', 'SpatialY', 'SpatialZ',
-                  'SpatialR', 'SpatialTheta', 'SpatialPhi',
-                  'Temperature', 'Pressure', 'Time',
-                  'Derived', 'Polarization', 'FocusTrack',
-                  'RampRate', 'Checksum', 'Flags',
-                  'ElapsedTime', 'Frequency',
-                  'MpWellSpatialX', 'MpWellSpatialY',
-                  'MpLocationIndex', 'MpWellReference',
-                  'PAFZActual', 'PAFZError', 'PAFSignalUsed',
-                  'ExposureTime', 'EndMarker']
+    Output
+    -------
+    spectra: numpy array
+        all the recorded spectra
+    x_values: numpy array
+        the raman shifts
+    params: dict
+        dictionary containing measurement parameters
+    map_params: dict
+        dictionary containing map parameters
+    origins: pandas dataframe
+        the spatio-temporal coordinates of each recording.
+        Note that it has triple column names (label, data type, data units)
+    """
+    DATA_TYPES = ['Arbitrary',
+                  'Spectral',
+                  'Intensity',
+                  'SpatialX',
+                  'SpatialY',
+                  'SpatialZ',
+                  'SpatialR',
+                  'SpatialTheta',
+                  'SpatialPhi',
+                  'Temperature',
+                  'Pressure',
+                  'Time',
+                  'Derived',
+                  'Polarization',
+                  'FocusTrack',
+                  'RampRate',
+                  'Checksum',
+                  'Flags',
+                  'ElapsedTime',
+                  'Frequency',
+                  'MpWellSpatialX',
+                  'MpWellSpatialY',
+                  'MpLocationIndex',
+                  'MpWellReference',
+                  'PAFZActual',
+                  'PAFZError',
+                  'PAFSignalUsed',
+                  'ExposureTime',
+                  'EndMarker']
 
-    DATA_UNITS = ['Arbitrary', 'RamanShift', 'Wavenumber', 'Nanometre',
-                  'ElectronVolt', 'Micron', 'Counts', 'Electrons',
-                  'Millimetres', 'Metres', 'Kelvin', 'Pascal',
-                  'Seconds', 'Milliseconds', 'Hours', 'Days',
-                  'Pixels', 'Intensity', 'RelativeIntensity',
-                  'Degrees', 'Radians',
-                  'Celcius', 'Farenheit', 'KelvinPerMinute',
-                  'FileTime', 'Microseconds', 'EndMarker']
+    DATA_UNITS = ['Arbitrary',
+                  'RamanShift',
+                  'Wavenumber',
+                  'Nanometre',
+                  'ElectronVolt',
+                  'Micron',
+                  'Counts',
+                  'Electrons',
+                  'Millimetres',
+                  'Metres',
+                  'Kelvin',
+                  'Pascal',
+                  'Seconds',
+                  'Milliseconds',
+                  'Hours',
+                  'Days',
+                  'Pixels',
+                  'Intensity',
+                  'RelativeIntensity',
+                  'Degrees',
+                  'Radians',
+                  'Celcius',
+                  'Farenheit',
+                  'KelvinPerMinute',
+                  'FileTime',
+                  'Microseconds',
+                  'EndMarker']
 
-    SCAN_TYPES = ['Unspecified', 'Static', 'Continuous', 'StepRepeat',
-                  'FilterScan', 'FilterImage', 'StreamLine', 'StreamLineHR',
-                  'Point', 'MultitrackDiscrete', 'LineFocusMapping']
+    SCAN_TYPES = ['Unspecified',
+                  'Static',
+                  'Continuous',
+                  'StepRepeat',
+                  'FilterScan',
+                  'FilterImage',
+                  'StreamLine',
+                  'StreamLineHR',
+                  'Point',
+                  'MultitrackDiscrete',
+                  'LineFocusMapping']
 
-    MAP_TYPES = {0: 'RandomPoints', 1: 'ColumnMajor', 2: 'Alternating',
-                 3: 'LineFocusMapping', 4: 'InvertedRows',
-                 5: 'InvertedColumns', 6: 'SurfaceProfile',
-                 7: 'XyLine', 68: 'InvertedRows', 128: 'Slice'}
-                # Remember to check this 68
+    MAP_TYPES = {0: 'RandomPoints',
+                 1: 'ColumnMajor',
+                 2: 'Alternating2',
+                 3: 'LineFocusMapping',
+                 4: 'InvertedRows',
+                 5: 'InvertedColumns',
+                 6: 'SurfaceProfile',
+                 7: 'XyLine',
+                 64: 'LiveTrack',  # added as it seemed fit
+                 66: 'StreamLine',
+                 68: 'InvertedRows',
+                 128: 'Slice'}
+    # Remember to check this 68
 
-    MEASUREMENT_TYPES = ['Unspecified', 'Single', 'Series', 'Map']
+    MEASUREMENT_TYPES = ['Unspecified',
+                         'Single',
+                         'Series',
+                         'Map']
 
-    WDF_FLAGS = {0: 'WdfXYXY', 1: 'WdfChecksum', 2: 'WdfCosmicRayRemoval',
-                 3: 'WdfMultitrack', 4: 'WdfSaturation', 5: 'WdfFileBackup',
-                 6: 'WdfTemporary', 7: 'WdfSlice', 8: 'WdfPQ',
+    WDF_FLAGS = {0: 'WdfXYXY',
+                 1: 'WdfChecksum',
+                 2: 'WdfCosmicRayRemoval',
+                 3: 'WdfMultitrack',
+                 4: 'WdfSaturation',
+                 5: 'WdfFileBackup',
+                 6: 'WdfTemporary',
+                 7: 'WdfSlice',
+                 8: 'WdfPQ',
                  16: 'UnknownFlag (check in WiRE?)'}
 
     try:
         f = open(filename, "rb")
-        print(f'Reading the file: \"{filename.split("/")[-1]}\"\n')
+        if verbose:
+            print(f'Reading the file: \"{filename.split("/")[-1]}\"\n')
     except IOError:
         raise IOError(f"File {filename} does not exist!")
 
@@ -153,7 +222,7 @@ def read_WDF(filename, verbose=False):
         params['ApplicationName'] = _read(f, '|S24').decode()
         version = _read(f, np.uint16, count=4)
         params['ApplicationVersion'] = '.'.join(
-                    [str(x) for x in version[0:-1]]) +\
+            [str(x) for x in version[0:-1]]) +\
             ' build ' + str(version[-1])
         params['ScanType'] = SCAN_TYPES[_read(f)]
         params['MeasurementType'] = MEASUREMENT_TYPES[_read(f)]
@@ -180,11 +249,11 @@ def read_WDF(filename, verbose=False):
         print_block_header(name, i)
         f.seek(b_off[i] + 16)
         m_flag = _read(f)
-        map_params['MapAreaType'] = MAP_TYPES[m_flag]#_read(f)]
+        map_params['MapAreaType'] = MAP_TYPES[m_flag]  # _read(f)]
         _read(f)
-        map_params['InitialCoordinates'] = np.round(_read(f, '<f', count=3),2)
-        map_params['StepSizes'] = np.round(_read(f, '<f', count=3),2)
-        map_params['NbSteps'] = n_x,n_y,n_z = _read(f, np.uint32, count=3)
+        map_params['InitialCoordinates'] = np.round(_read(f, '<f', count=3), 2)
+        map_params['StepSizes'] = np.round(_read(f, '<f', count=3), 2)
+        map_params['NbSteps'] = n_x, n_y, n_z = _read(f, np.uint32, count=3)
         map_params['LineFocusSize'] = _read(f)
     if verbose:
         for key, val in map_params.items():
@@ -217,6 +286,9 @@ def read_WDF(filename, verbose=False):
                           'so it could be read\n'
                           'the same way as other scan types'
                           '(from left to right, and from top to bottom)')
+            if map_params['MapAreaType'] in ['Alternating', 'StreamLine']:
+                spectra = spectra.reshape(n_x, n_y, -1)
+                spectra = np.rot90(spectra, axes=(0, 1)).reshape(n_x*n_y, -1)
 
     name = 'XLST'
     gen = [i for i, x in enumerate(block_names) if x == name]
@@ -275,7 +347,7 @@ def read_WDF(filename, verbose=False):
                 # special case for reading timestamps
             else:
                 origin_values[set_n] = np.round(
-                                        _read(f, '<d', count=nspectra), 2)
+                    _read(f, '<d', count=nspectra), 2)
 
             if params['MeasurementType'] == 'Map':
                 if map_params['MapAreaType'] == 'InvertedRows':
@@ -287,11 +359,13 @@ def read_WDF(filename, verbose=False):
                                             else origin_values[set_n][xx]
                                             for xx in range(nspectra)]
                     origin_values[set_n] = np.asarray(origin_values[set_n])
+                if map_params['MapAreaType'] in ['Alternating', 'StreamLine']:
+                    ovl = origin_values[set_n].reshape(n_x, n_y)
+                    origin_values[set_n] = np.rot90(ovl, axes=(0, 1)).ravel()
     if verbose:
         print('\n\n\n')
     origins = pd.DataFrame(origin_values.T,
-                        columns=[origin_labels,
-                                 origin_set_dtypes,
-                                 origin_set_units])
-    
+                           columns=[f"{x} ({d})" for (x, d)
+                                    in zip(origin_labels, origin_set_units)])
+    print("#######################################")
     return (spectra, x_values, params, map_params, origins)

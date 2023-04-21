@@ -1,24 +1,25 @@
 # -*- coding: utf-8 -*-
 # %%
 import os
+import psutil
 import numpy as np
 import pandas as pd
 from sklearn import decomposition
-from sklearn.neighbors import LocalOutlierFactor
-from scipy.signal import savgol_filter, correlate2d
+from pymcr.mcr import McrAR
+from pymcr.regressors import NNLS, OLS
+from pymcr.constraints import ConstraintNonneg, ConstraintNorm
 from scipy.ndimage import median_filter
-from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
-from matplotlib import colors
-from matplotlib.widgets import Button
+from matplotlib import colors, colormaps, patches
 import seaborn as sns
 from tkinter import filedialog, Tk, messagebox
 from timeit import default_timer as time
 from read_WDF import convert_time, read_WDF
-from utilities import NavigationButtons, clean, rolling_median,\
-                        slice_lr, baseline_als
-#import deconvolution
+from warnings import warn
+import utilities as ut
+import preprocessing as pp
+
 
 sns.set()
 '''This script uses NMF deconvolution
@@ -30,79 +31,103 @@ You should first choose the data file with the map scan in the .wdf format
 
 Set the initialization dictionary values
 That'_s it!
-First plot: your spectra (with navigation buttons)
-Second plot: the components found
-Third plot: the heatmap of the mixing coefficients
-            (shows the abundance of each component troughout the map)
-            when you double-click on a pixel on this map,
-            it will pop-up another plot
-            showing the spectra recorded at this point,
-            together with the contributions of each component
-'''
-#%%
-# -----------------------Choose a file-----------------------------------------
-filename = 'Data/M1SCMap_2_MJ_Truncated_CR2_NF50_PCA3_Clean2_.wdf'
 
-initialization = {'SliceValues': [160, 1250],  # Use None to count all
-                  'NMF_NumberOfComponents': 6,
-                  'PCA_components': 0.998,
+'''
+
+def change_unit(bsize, factor=1024, suffix="B"):
+    """
+    Scale bytes to its proper format
+    e.g:
+        1253656 => '1.20MB'
+        1253656678 => '1.17GB'
+    """
+    for unit in ["", "K", "M", "G", "T", "P"]:
+        if bsize < factor:
+            return bsize, unit+suffix
+        else:
+            bsize /= factor
+
+def memory_check(filesize, suffix="B"):
+    """
+    Compare the available os memory with the objects' memory
+    """
+
+    fsize, fsize_unit = change_unit(filesize)
+    print(f"Objects' size is: {fsize:.2f} {fsize_unit}")
+
+    memory_data = psutil.virtual_memory()
+    msize, msize_unit = change_unit(memory_data.available)
+    print(f"Available memory is {msize:.2f} {msize_unit}")
+
+
+
+# %%
+# -----------------------Choose a file-----------------------------------------
+folder_name = os.path.abspath("/home/dejan/Documents/RamanData/frejus21/")
+file_name = "exampleA2.wdf"
+filename = os.path.join(folder_name, file_name)
+
+memory_check(os.path.getsize(filename))
+
+initialization = {'SliceValues': [None, None],  # Use None to count all
+                  'NMF_NumberOfComponents': 4,
+                  'PCA_components': 5,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
-                  'NumberOfLinesToSkip_End': 6,
+                  'NumberOfLinesToSkip_End': 0,
                   'BaselineCorrection': False,
                   'CosmicRayCorrection': False,
-                  'AbsoluteScale': True}  # what type of colorbar to use
-
+                  # Nearest neighbour method
+                  # To use only in maps where step sizes are smaller then
+                  # Sample's feature sizes (oversampled maps)
+                  'AbsoluteScale': False,  # what type of colorbar to use
+                  "save_data": False}
+# %%
 # Reading the data from the .wdf file
 spectra, sigma, params, map_params, origins =\
-                            read_WDF(filename, verbose=True)
-
-
-'''
-- **"spectra"** is a 2D numpy array containing the intensities
-    recorded at each point in a map scan.
-    It is of shape:
-    `(N°_measurement_points, N°_RamanShifts)`
-- **"sigma"** is a 1D numpy array containing all the ramans shift values
-    Its' length is `N°_RamanShifts`
-- **"params"** is a dictionnary containing measurement parameters
-- **"map_params"** is dictionnary containing map parameters
-- **"origins"** is a pandas dataframe giving detail on each point in the map scan
-    (time of measurement, _coordinates and some other info).
+    read_WDF(filename, verbose=True)
+"""
+-   `spectra` : 2D ndarray
+        contains the intensities recorded at each point in a map scan.
+        It is of shape: `(N°_measurement_points, N°_RamanShifts)`
+-   `sigma` : 1D ndarray
+        contains all the ramans shift values (x_values)
+        Its' length is `N°_RamanShifts`
+-   `params` is a dictionnary containing measurement parameters
+-   `map_params` is dictionnary containing map parameters
+-   `origins` : pandas dataframe
+        gives detail on each point in the map
+        (time of measurement, _coordinates and some other info).
 
 > _Note: It should be noted that the timestamp
     recorded in the origins dataframe is in the Windows 64bit format,
     if you want to convert it to the human readable format,
     you can use the imported "convert_time" function_
-'''
+"""
+assert params['MeasurementType'] == 'Map', 'This script is intended for maps'
 
-see_all_spectra = NavigationButtons(sigma, spectra, autoscale_y=True)
-
-#%%
+# %%
 # put the retreived number of measurements in a variable
 # with a shorter name, as it will be used quite often:
+_n_points = params.get('Count', len(spectra))
 try:
-    _n_points = int(params['Count'])
+    # Finding in what axes the scan was taken:
+    _scan_axes = np.where(map_params['NbSteps'] > 1)[0]
 except (NameError, KeyError):
-    _n_points = len(spectra)
-try:
-    if params['MeasurementType'] == 'Map':
-        # Finding in what axes the scan was taken:
-        _x_index, _y_index = np.where(map_params['NbSteps'] > 1)[0]
-except (NameError, KeyError):
-    _x_index, _y_index = 0, 1
+    _scan_axes = (0, 1)
 
 try:
-    if params['MeasurementType'] == 'Map':
-        # ATTENTION : from this point on in the script,
-        # the two relevant dimensions  will be called
-        # X and Y regardless if one of them is Z in reality (for slices)
-        _n_x, _n_y = map_params['NbSteps'][[_x_index, _y_index]]
-except (NameError, KeyError):
+    # ATTENTION : from this point on in the script,
+    # the two relevant dimensions will be called X and Y
+    # regardless if one of them is Z in reality (for slices)
+    _n_x, _n_y = map_params['NbSteps'][_scan_axes]
+except (NameError, KeyError, ValueError):
     while True:
-        _n_x = int(input("Enter the total number of measurement points along x-axis: "))
-        _n_y = int(input("Enter the total number of measurement points along y-axis: "))
+        _n_x = int(input("Enter the total number of measurement points "
+                         "along x-axis: "))
+        _n_y = int(input("Enter the total number of measurement points "
+                         "along y-axis: "))
         if _n_x*_n_y == _n_points:
             print("That looks ok.")
             break
@@ -112,160 +137,146 @@ except (NameError, KeyError):
         break
 
 try:
-    if params['MeasurementType'] == 'Map':
-        _s_x, _s_y = map_params['StepSizes'][[_x_index, _y_index]]
-except (NameError, KeyError):
+    _s_x, _s_y = map_params['StepSizes'][_scan_axes]
+except (NameError, KeyError, ValueError):
     _s_x = int(input("Enter the size of the step along x-axis: "))
     _s_y = int(input("Enter the size of the step along y-axis: "))
     print("ok")
 
-try:
-    if params['MeasurementType'] == 'Map':
-        if (initialization['NumberOfLinesToSkip_Beggining']
-                + initialization['NumberOfLinesToSkip_End']) > _n_y:
-            raise SystemExit('You are skiping more lines than present in the scan.\n'
-                             'Please revise your initialization parameters')
-        _n_yy = _n_y - initialization['NumberOfLinesToSkip_End'] -\
-                       initialization['NumberOfLinesToSkip_Beggining']
-    else:
-        raise SystemExit("Can't yet handle this type of scan")
-except:
-    pass
+
+if (initialization['NumberOfLinesToSkip_Beggining']
+        + initialization['NumberOfLinesToSkip_End']) > _n_y:
+    raise SystemExit('You chose to skip more lines than present in the scan.\n'
+                     'Please revise your initialization parameters')
+# readjust the number of rows:
+_n_y -= initialization['NumberOfLinesToSkip_End'] +\
+    initialization['NumberOfLinesToSkip_Beggining']
+
+
+# spectra2 = np.copy(spectra)
+# spectra2.resize(_n_y, _n_x, len(sigma))
+# spectra = spectra2.reshape(_n_x*_n_y, -1)
+# spectra = pp.correct_saturated(spectra, (_n_y, _n_x))
+# del spectra2
 # %%
 # =============================================================================
 #                               SLICING....
 # =============================================================================
 # Isolating the part of the spectra that interests us
-try:
-    pos_left = initialization["SliceValues"][0]
-except (ValueError, TypeError, KeyError):
-    pos_left = None
-try:
-    pos_right = initialization["SliceValues"][1]
-except (ValueError, TypeError, KeyError):
-    pos_right = None
-
-spectra_kept, sigma_kept = slice_lr(spectra, sigma,
-                                    pos_left=pos_left,
-                                    pos_right=pos_right)
-
+spectra_kept, sigma_kept = ut.slice_lr(spectra, sigma, **initialization)
 # Removing the lines from top and/or bottom of the map
-try:
-    skip_lines_up = initialization['NumberOfLinesToSkip_Beggining']
-except (ValueError, KeyError):
-    skip_lines_up = 0
-_start_pos = skip_lines_up * _n_x
+spectra_kept = ut.skip_ud(spectra_kept, _n_x=_n_x, **initialization)
 
-try:
-    skip_lines_down = initialization['NumberOfLinesToSkip_End']
-except (ValueError, KeyError):
-    skip_lines_down = 0
+spectra_kept -= np.min(spectra_kept, axis=-1, keepdims=True)
 
-if skip_lines_down == 0:
-    _end_pos = None
-else:
-    _end_pos = -np.abs(skip_lines_down) * _n_x
 
-spectra_kept = spectra_kept[_start_pos:_end_pos]
+spectra_log = (np.log(spectra_kept+1)).reshape(_n_y, _n_x, -1)
+see_all_maps = ut.AllMaps(spectra_log,
+                       sigma=sigma_kept)  # , title="raw spectra (log_scale)")
+plt.suptitle("raw spectra (log_scale)")
 
-# =============================================================================
-# ATTENTION: This next line is likely buggy. The columns containing the coor-
-# dinates are not necessarily the ones indicated with _x_index ans _y_index!
-# =============================================================================
-#_coordinates = origins.iloc[_start_pos:_end_pos, [_x_index+1, _y_index+1]]
 # %%
-# =============================================================================
-#                                     PCA...
-# =============================================================================
-pca = decomposition.PCA(n_components=initialization['PCA_components'])
-pca_fit = pca.fit(spectra_kept)
-
-spectra_reduced = pca_fit.transform(spectra_kept)
-spectra_denoised = pca_fit.inverse_transform(spectra_reduced)
-
-# =============================================================================
-#                  showing the smoothed spectra
-# =============================================================================
-
-_s = np.stack((spectra_kept, spectra_denoised), axis=-1)
-see_all_spectra = NavigationButtons(sigma_kept, _s, autoscale_y=True,
-                                    label=["corrected spectra", "pca denoised"],
-                                    figsize=(12, 12))
-
-#%%
 # =============================================================================
 # Finding the baseline using the asynchronous least squares method
 # =============================================================================
 if initialization['BaselineCorrection']:
-    b_line = baseline_als(spectra_denoised, p=1e-4, lam=1e4)
+
+    b_line = ut.baseline_als(spectra_kept, p=1e-3, lam=3000*len(sigma_kept))
+
+    b_corr_spectra = spectra_kept - b_line
+    # Remove the eventual offsets:
+    b_corr_spectra -= np.min(b_corr_spectra, axis=1)[:, np.newaxis]
+
+    # Visualise the baseline correction:
+    _baseline_stack = np.stack((spectra_kept, b_line, b_corr_spectra),
+                               axis=-1)
+    labels = ['original spectra', 'baseline', 'baseline corrected spectra']
+    check_baseline = ut.NavigationButtons(sigma_kept, _baseline_stack,
+                                       autoscale_y=True, label=labels)
+    see_baseline_map = ut.AllMaps(b_line.reshape(_n_y, _n_x, -1),
+                               sigma=sigma_kept)
+    plt.suptitle("baseline")
 else:
-    b_line = np.zeros_like(spectra_denoised)
+    b_corr_spectra = spectra_kept -\
+        np.min(spectra_kept, axis=-1, keepdims=True)
 
-# Remove the eventual offsets:
-corrected_spectra = spectra_denoised - b_line
-corrected_spectra -= np.min(corrected_spectra, axis=1)[:, np.newaxis]
-
-# Visualise the baseline correction:
-_baseline_stack = np.stack((spectra_denoised, b_line, corrected_spectra),
-                           axis=-1)
-labels = ['original spectra', 'baseline', 'baseline corrected spectra']
-check_baseline = NavigationButtons(sigma_kept, _baseline_stack,
-                                   autoscale_y=True, label=labels)
 
 # %%
 # =============================================================================
-#               Finding the Cosmic Rays with nearest neghbour
-#                 and correcting them with median filter...
+#                                 CR correction...
 # =============================================================================
+
 if initialization['CosmicRayCorrection']:
-    clf = LocalOutlierFactor(n_neighbors=5, n_jobs=-1)
-    prd = clf.fit_predict(corrected_spectra)
-    CR_cand_ind = np.where(prd == -1)[0]
+    print("starting the cosmic ray correction")
+    mock_sp3 = ut.remove_CRs(b_corr_spectra, sigma_kept,
+                          _n_x=0, _n_y=0, **initialization)
 else:
-    CR_cand_ind = np.asarray([])
+    mock_sp3 = b_corr_spectra
 
-if len(CR_cand_ind) > 0:
-    # Find the median value for each spectra, but only with regard to
-    # its' neighbours from the same line
-    med_spectra_x = rolling_median(
-                        corrected_spectra.reshape(_n_yy, _n_x, len(sigma_kept)),
-                        w_size=5, ax=1,
-                        mode='mirror').reshape((-1, len(sigma_kept)))
 
-    titles = [f"candidate from Nearest Neighbour\noriginal spectra N°{i} "
-              for i in np.nditer(CR_cand_ind)]
-    _ss = np.stack((spectra_denoised[CR_cand_ind],
-                    b_line[CR_cand_ind],
-                    corrected_spectra[CR_cand_ind],
-                    med_spectra_x[CR_cand_ind]), axis=-1)
-    check_CR_candidates = NavigationButtons(sigma_kept, _ss, autoscale_y=True,
-                                            title=titles,
-                                            label=['original denoised',
-                                                   'baseline',
-                                                   'baseline corrected',
-                                                   'median correction of CR']);
+# %%
+# =============================================================================
+# ---------------------------------- PCA --------------------------------------
+# =============================================================================
+print(f"smoothing with PCA ({initialization['PCA_components']} components)")
+# =============================================================================
+mock_sp3 /= np.trapz(mock_sp3, axis=-1)[:, None]
+pca = decomposition.PCA(n_components=initialization['PCA_components'])
+spectra_reduced = pca.fit_transform(mock_sp3)
+# spectra_reduced = np.dot(mock_sp3 - np.mean(mock_sp3, axis=0), pca.components_.T)
 
-    # Apply the correction:
-    # (just replace the whole spectra containing the cosmic ray
-    # with the median spectra of its' neighborhood)
-    if len(CR_cand_ind) > 0:
-        corrected_spectra[CR_cand_ind] = med_spectra_x[CR_cand_ind]
+spectra_denoised = pca.inverse_transform(spectra_reduced)
+# spectra_denoised -= np.min(spectra_denoised, axis=-1, keepdims=True)
+# spectra_denoised = np.dot(spectra_reduced, pca.components_)+np.mean(mock_sp3, axis=0)
 
+vidji_pca = ut.AllMaps(spectra_reduced.reshape(_n_y, _n_x, -1),
+                    components=pca.components_,
+                    components_sigma=sigma_kept, title="pca component")
+
+
+
+########### showing the smoothed spectra #####################
+_s = np.stack((mock_sp3 - np.min(mock_sp3, axis=-1, keepdims=True),
+               spectra_denoised), axis=-1)
+see_all_denoised = ut.NavigationButtons(sigma_kept, _s, autoscale_y=True,
+                                     label=["scaled orig spectra",
+                                            "pca denoised"],
+                                     figsize=(12, 12))
+see_all_denoised.figr.suptitle("PCA denoising result")
+
+del b_corr_spectra
+del mock_sp3
 # %%
 # =============================================================================
 #                                   NMF step
 # =============================================================================
-
-spectra_cleaned = clean(sigma_kept, spectra_denoised, mode='area')
-
+# initialization['NMF_NumberOfComponents'] = 6
+spectra_denoised -= np.min(spectra_denoised, axis=-1, keepdims=True)
+norma  = 1#np.sum(spectra_denoised, axis=-1, keepdims=True)
+normalized_spectra = spectra_denoised / norma
+#%%
 _n_components = initialization['NMF_NumberOfComponents']
 nmf_model = decomposition.NMF(n_components=_n_components, init='nndsvda',
-                              max_iter=7, l1_ratio=1)
+                              max_iter=7)#, alpha_W=0.01, alpha_H=0.1)
 _start = time()
 print('starting nmf... (be patient, this may take some time...)')
-mix = nmf_model.fit_transform(spectra_cleaned)
-components = nmf_model.components_
-reconstructed_spectra1 = nmf_model.inverse_transform(mix)
+mix = nmf_model.fit_transform(normalized_spectra)
+mix_norma = np.sum(mix, axis=-1, keepdims=True)
+mix /= mix_norma
+# components = nmf_model.components_
+#%%
+print('renormalizing components and coefficients...')
+# Note constraint order matters
+mcrar = McrAR(max_iter=100, st_regr='NNLS', c_regr='OLS',
+              c_constraints=[ConstraintNonneg(), ConstraintNorm()],
+              st_constraints=[ConstraintNonneg()])
+
+mcrar.fit(normalized_spectra, C=mix)
+#%%
+# components_norma = np.sum(components, axis=-1, keepdims=True)
+components = mcrar.ST_opt_
+mix = mcrar.C_opt_
+reconstructed_spectra = mcrar.D_opt_
 _end = time()
 print(f'nmf done in {_end - _start:.2f}s')
 
@@ -273,20 +284,19 @@ print(f'nmf done in {_end - _start:.2f}s')
 # =============================================================================
 #                    preparing the mixture coefficients
 # =============================================================================
+_start_pos = 0
 
 mix.resize((_n_x*_n_y), _n_components, )
 
 mix = np.roll(mix, _start_pos, axis=0)
-_comp_area = np.empty(_n_components)
-for _z in range(_n_components):
-    # area beneath each component:
-    _comp_area[_z] = np.trapz(components[_z])
-    components[_z] /= _comp_area[_z]  # normalizing the components by area
-    # renormalizing the mixture coefficients:
-    mix[:, _z] *= _comp_area[np.newaxis, _z]
+
 spectra_reconstructed = np.dot(mix, components)
 _mix_reshaped = mix.reshape(_n_y, _n_x, _n_components)
 
+vidju_nmf = ut.AllMaps(_mix_reshaped, components=components,
+                    components_sigma=sigma_kept,
+                    title="Map of component's contribution")
+plt.suptitle("Resluts of NMF")
 
 # %%
 # =============================================================================
@@ -296,13 +306,13 @@ sns.set()  # to make plots pretty :)
 
 # to keep always the same colors for the same components:
 col_norm = colors.Normalize(vmin=0, vmax=_n_components)
-color_set = ScalarMappable(norm=col_norm, cmap="brg")
+color_set = ScalarMappable(norm=col_norm, cmap="hsv")
 
 # infer the number of subplots and their disposition from n_components
 fi, _ax = plt.subplots(int(np.floor(np.sqrt(_n_components))),
                        int(np.ceil(_n_components /
                                    np.floor(np.sqrt(_n_components))
-                                   )))
+                                   )), sharex=True, sharey=False)
 if _n_components > 1:
     _ax = _ax.ravel()
 else:
@@ -314,7 +324,7 @@ for _i in range(_n_components):
 try:
     fi.text(0.5, 0.04,
             f"{params['XlistDataType']} recordings"
-            f"in {params['XlistDataUnits']} units",
+            f" in {params['XlistDataUnits']} units",
             ha='center')
 except:
     pass
@@ -332,7 +342,9 @@ if _n_components > 1:
 else:
     _ax = [_ax]
 
-#%%
+mix_sum = np.sum(mix, axis=-1)
+
+
 def onclick(event):
     '''Double-clicking on a pixel will pop-up the (cleaned) spectrum
     corresponding to that pixel, as well as its deconvolution on the components
@@ -345,7 +357,7 @@ def onclick(event):
 
         if event.dblclick:
             ff, aa = plt.subplots()
-            aa.scatter(sigma_kept, spectra_cleaned[spec_num], alpha=0.3,
+            aa.scatter(sigma_kept, normalized_spectra[spec_num], alpha=0.3,
                        label=f'(cleaned) spectrum n°{broj}')
             aa.plot(sigma_kept, spectra_reconstructed[broj], '--k',
                     label='reconstructed spectrum')
@@ -353,7 +365,7 @@ def onclick(event):
                 aa.plot(sigma_kept, components[k]*mix[broj][k],
                         color=color_set.to_rgba(k),
                         label=f'Component {k} contribution'
-                              f'({mix[broj][k]*100:.1f}%)')
+                              f'({mix[broj][k]*100/mix_sum[broj]:.1f}%)')
 
 # This next part is to reorganize the order of labels,
 # so to put the scatter plot first
@@ -369,81 +381,88 @@ def onclick(event):
         print("you clicked outside the canvas, you bastard :)")
 
 
-_xcolumn_name = ['X', 'Y', 'Z'][_x_index]
-_ycolumn_name = ['X', 'Y', 'Z'][_y_index]
+
 
 #################################################################################
 ############## This formatting should be adapted case by case ###################
-try:
-    _y_ticks = [str(int(x/1000))+'mm' for x in
-                np.asarray(origins[_ycolumn_name].iloc[:_n_x*_n_y:_n_x])]
-    _x_ticks = [str(int(x/1000))+'mm' for x in
-                np.asarray(origins[_xcolumn_name].iloc[:_n_x])]
-except:
-    pass
+
 #################################################################################
 if initialization['AbsoluteScale'] == True:
     scaling = {'vmin': 0, 'vmax': 1}
 else:
-    scaling={}
+    scaling = {}
 for _i in range(_n_components):
-    sns.heatmap(_mix_reshaped[:, :, _i], ax=_ax[_i], cmap="jet", annot=False, **scaling)
+    sns.heatmap(_mix_reshaped[:, :, _i], ax=_ax[_i],
+                cmap="magma", annot=False, **scaling)
 #    _ax[_i].set_aspect(_s_y/_s_x)
     _ax[_i].set_title(f'Component {_i}', color=color_set.to_rgba(_i),
                       fontweight='extra bold')
-#    _ax[_i].set_xticks(10*np.arange(max(12, np.ceil(_n_x/10))))
-#    _ax[_i].set_yticks(10*np.arange(max(12, np.ceil(_n_y/10))))
-#    print(_i)
-    #plt.yticks(10*np.arange(np.floor(_n_y/10)), _y_ticks[::10])
-#    try:
-#        _ax[_i].set_xticklabels(_x_ticks[::10], size=8, va='bottom')
-#        _ax[_i].set_yticklabels(_y_ticks[::10], size=8)
-#    except: pass
-    plt.setp(_ax[_i].get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-#try:
-#    fig.text(0.5, 0.014,
-#             f"{origins[_xcolumn_name].columns.to_frame().iloc[0,0]}",
-#             #f" in {origins[_xcolumn_name].columns.to_frame().iloc[0,1]}",
-#             ha='center')
-#    fig.text(0.04, 0.5,
-#             f"{origins[_ycolumn_name].columns.to_frame().iloc[0,0]}",
-#             #f" in {origins[_ycolumn_name].columns.to_frame().iloc[0,1]}",
-#             rotation=90, va='center')
-#except: pass
+    _xcolumn_name, _ycolumn_name = ([origins.columns[i] for i in _scan_axes])
+    if "R" in _xcolumn_name:
+        _ycolumn_name = origins.columns[3]
+    # try:
+    _x_ticks = origins[_xcolumn_name].to_numpy().ravel()[:_n_x]
+    _y_ticks = origins[_ycolumn_name].to_numpy().ravel()[::_n_x]
+    _pos_x = _ax[_i].get_xticks()
+    _pos_y = _ax[_i].get_yticks()
+    _xlabels = [str(x) for x in _x_ticks[::int(np.ceil(_n_x/len(_pos_x)))]]
+    _ylabels = [str(y) for y in _y_ticks[::int(np.ceil(_n_y/len(_pos_y)))]]
+    _ax[_i].set_xticks(_pos_x)
+    _ax[_i].set_xticklabels(_xlabels, rotation=45,
+                            ha="right", fontstretch=50)
+    _ax[_i].set_yticks(_pos_y)
+    _ax[_i].set_yticklabels(_ylabels, rotation=0,
+                            ha="right", fontstretch=50)
+    _ax[_i].set_xlabel(_xcolumn_name)
+    _ax[_i].set_ylabel(_ycolumn_name)
+
+    # except:
+    #     pass
 fig.suptitle('Heatmaps showing the abundance of individual components'
              ' throughout the scanned area.')
 fig.canvas.mpl_connect('button_press_event', onclick)
 
 # %%
+
+boje = np.array(colormaps["tab10"].colors[:_n_components])
+srednja = np.mean(_mix_reshaped, axis=(0,1))
+my_mix = _mix_reshaped - srednja
+najjaci = np.argmax(my_mix, axis=2)
+konacna = boje[najjaci]
+fig, ax = plt.subplots()
+konac = ax.imshow(konacna, interpolation="blackman", filterrad=1)
+legend_elements = []
+for i in range(_n_components):
+    legend_elements.append(patches.Patch(label=f"component {i}",
+                                         facecolor=boje[i]))
+ax.legend(handles=legend_elements, bbox_to_anchor=(1.3, 1.01))
+ax.axis("off")
+fig.suptitle("Showing the relative predominance of components throughout the map")
+plt.show()
+# %%
 # =============================================================================
 #        saving some data for usage in other software (Origin, Excel..)
 # =============================================================================
-_basic_mix = pd.DataFrame(
+if True:#initialization["save_data"]:
+    _basic_mix = pd.DataFrame(
         np.copy(mix),
         columns=[f"mixing coeff. for the component {l}"
                  for l in np.arange(mix.shape[1])]
-        )
-_save_filename_extension = (f"_{_n_components}NMFcomponents_from"
-                            f".csv")
-_save_filename_folder = '/'.join(x for x in filename.split('/')[:-1])+'/'\
-                        + filename.split('/')[-1][:-4]+'/'
-if not os.path.exists(_save_filename_folder):
-    os.mkdir(_save_filename_folder)
+    )
+    _save_filename_extension = (f"_{_n_components}NMFcomponents_from"
+                                f".csv")
+    _save_filename_folder = '/'.join(x for x in filename.split('/')[:-1])+'/'\
+                            + filename.split('/')[-1][:-4]+'/'
+    if not os.path.exists(_save_filename_folder):
+        os.mkdir(_save_filename_folder)
 
-_basic_mix.to_csv(
+    _basic_mix.to_csv(
         f"{_save_filename_folder}MixingCoeffs{_save_filename_extension}",
         sep=';', index=False)
-_save_components = pd.DataFrame(
+    _save_components = pd.DataFrame(
         components.T, index=sigma_kept,
         columns=[f"Component{_i}" for _i in np.arange(_n_components)])
-_save_components.index.name = 'Raman shift in cm-1'
-_save_components.to_csv(
+    _save_components.index.name = 'Raman shift in cm-1'
+    _save_components.to_csv(
         f"{_save_filename_folder}Components{_save_filename_extension}",
         sep=';')
-# %%
-pca_err = np.sum(np.abs(corrected_spectra - reconstructed_spectra1), axis=1)
-pca_err.resize(_n_y, _n_x)
-plt.figure()
-sns.heatmap(clf.negative_outlier_factor_.reshape(_n_x, _n_y))
-plt.show()
-plt.title("Checking the reconstruction error from NMF")
