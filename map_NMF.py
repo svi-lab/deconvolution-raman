@@ -11,7 +11,7 @@ from pymcr.constraints import ConstraintNonneg, ConstraintNorm
 from scipy.ndimage import median_filter
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
-from matplotlib import colors
+from matplotlib import colors, colormaps, patches
 import seaborn as sns
 from tkinter import filedialog, Tk, messagebox
 from timeit import default_timer as time
@@ -63,19 +63,15 @@ def memory_check(filesize, suffix="B"):
 
 # %%
 # -----------------------Choose a file-----------------------------------------
-
-# folder_name = "../../RamanData/Sirine/"
-folder_name = "../../RamanData/Giuseppe/"
-# folder_name = "/home/dejan/Documents/RamanData/Quentin/08-02-2022/"
-# folder_name = "../../RamanData/Thibault/St-Etienne/"
-file_n = "TFCD_ITOcell_532nm_p100_1s_depthslice.wdf"
-filename = folder_name + file_n
+folder_name = os.path.abspath("/home/dejan/Documents/RamanData/frejus21/")
+file_name = "exampleA2.wdf"
+filename = os.path.join(folder_name, file_name)
 
 memory_check(os.path.getsize(filename))
 
-initialization = {'SliceValues': [200, None],  # Use None to count all
+initialization = {'SliceValues': [None, None],  # Use None to count all
                   'NMF_NumberOfComponents': 4,
-                  'PCA_components': 7,
+                  'PCA_components': 5,
                   # Put in the int number from 0 to _n_y:
                   'NumberOfLinesToSkip_Beggining': 0,
                   # Put in the int number from 0 to _n_y - previous element:
@@ -110,7 +106,6 @@ spectra, sigma, params, map_params, origins =\
     you can use the imported "convert_time" function_
 """
 assert params['MeasurementType'] == 'Map', 'This script is intended for maps'
-
 
 # %%
 # put the retreived number of measurements in a variable
@@ -225,13 +220,13 @@ else:
 # =============================================================================
 print(f"smoothing with PCA ({initialization['PCA_components']} components)")
 # =============================================================================
-mock_sp3 /= np.max(mock_sp3, axis=-1, keepdims=True)
+mock_sp3 /= np.trapz(mock_sp3, axis=-1)[:, None]
 pca = decomposition.PCA(n_components=initialization['PCA_components'])
 spectra_reduced = pca.fit_transform(mock_sp3)
 # spectra_reduced = np.dot(mock_sp3 - np.mean(mock_sp3, axis=0), pca.components_.T)
 
 spectra_denoised = pca.inverse_transform(spectra_reduced)
-spectra_denoised -= np.min(spectra_denoised, axis=-1, keepdims=True)
+# spectra_denoised -= np.min(spectra_denoised, axis=-1, keepdims=True)
 # spectra_denoised = np.dot(spectra_reduced, pca.components_)+np.mean(mock_sp3, axis=0)
 
 vidji_pca = ut.AllMaps(spectra_reduced.reshape(_n_y, _n_x, -1),
@@ -241,7 +236,7 @@ vidji_pca = ut.AllMaps(spectra_reduced.reshape(_n_y, _n_x, -1),
 
 
 ########### showing the smoothed spectra #####################
-_s = np.stack((mock_sp3,
+_s = np.stack((mock_sp3 - np.min(mock_sp3, axis=-1, keepdims=True),
                spectra_denoised), axis=-1)
 see_all_denoised = ut.NavigationButtons(sigma_kept, _s, autoscale_y=True,
                                      label=["scaled orig spectra",
@@ -256,7 +251,8 @@ del mock_sp3
 #                                   NMF step
 # =============================================================================
 # initialization['NMF_NumberOfComponents'] = 6
-norma  = np.sum(spectra_denoised, axis=-1, keepdims=True)
+spectra_denoised -= np.min(spectra_denoised, axis=-1, keepdims=True)
+norma  = 1#np.sum(spectra_denoised, axis=-1, keepdims=True)
 normalized_spectra = spectra_denoised / norma
 #%%
 _n_components = initialization['NMF_NumberOfComponents']
@@ -427,10 +423,27 @@ fig.suptitle('Heatmaps showing the abundance of individual components'
 fig.canvas.mpl_connect('button_press_event', onclick)
 
 # %%
+
+boje = np.array(colormaps["tab10"].colors[:_n_components])
+srednja = np.mean(_mix_reshaped, axis=(0,1))
+my_mix = _mix_reshaped - srednja
+najjaci = np.argmax(my_mix, axis=2)
+konacna = boje[najjaci]
+fig, ax = plt.subplots()
+konac = ax.imshow(konacna, interpolation="blackman", filterrad=1)
+legend_elements = []
+for i in range(_n_components):
+    legend_elements.append(patches.Patch(label=f"component {i}",
+                                         facecolor=boje[i]))
+ax.legend(handles=legend_elements, bbox_to_anchor=(1.3, 1.01))
+ax.axis("off")
+fig.suptitle("Showing the relative predominance of components throughout the map")
+plt.show()
+# %%
 # =============================================================================
 #        saving some data for usage in other software (Origin, Excel..)
 # =============================================================================
-if initialization["save_data"]:
+if True:#initialization["save_data"]:
     _basic_mix = pd.DataFrame(
         np.copy(mix),
         columns=[f"mixing coeff. for the component {l}"
